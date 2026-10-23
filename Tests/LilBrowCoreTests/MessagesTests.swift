@@ -26,6 +26,10 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(try MessageCoding.decodeInbound(Data(#"{"type":"littleMoved","windowId":42}"#.utf8)) == .littleMoved(windowId: 42))
 }
 
+@Test func decodesExtensionLog() throws {
+    #expect(try MessageCoding.decodeInbound(Data(#"{"type":"log","message":"move: kept page"}"#.utf8)) == .log(message: "move: kept page"))
+}
+
 @Test func rejectsUnknownType() {
     #expect(throws: (any Error).self) { try MessageCoding.decodeInbound(Data(#"{"type":"bogus"}"#.utf8)) }
 }

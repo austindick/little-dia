@@ -35,6 +35,8 @@ public enum InboundMessage: Equatable, Sendable {
     /// Sent just before a little window is closed because its page moved to the main window.
     case littleMoved(windowId: Int)
     case copy(url: URL)
+    /// A diagnostic line from the extension (its own console isn't reachable in Dia).
+    case log(message: String)
 }
 
 /// JSON wire format: an object whose `"type"` is the case name and whose other keys are the case's labels.
@@ -52,7 +54,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, windowId, browserBundleID, browserPID, extensionVersion, error
+    case type, requestId, url, bounds, focused, windowId, browserBundleID, browserPID, extensionVersion, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LilBrowCore.Key {
@@ -125,6 +127,8 @@ extension InboundMessage: Codable {
             self = .littleMoved(windowId: try c.decode(Int.self, forKey: .windowId))
         case "copy":
             self = .copy(url: try c.decodeURL(.url))
+        case "log":
+            self = .log(message: try c.decode(String.self, forKey: .message))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Unknown inbound type \(other)")
         }
@@ -167,6 +171,9 @@ extension InboundMessage: Codable {
         case let .copy(url):
             try c.encode("copy", forKey: .type)
             try c.encode(url.absoluteString, forKey: .url)
+        case let .log(message):
+            try c.encode("log", forKey: .type)
+            try c.encode(message, forKey: .message)
         }
     }
 }

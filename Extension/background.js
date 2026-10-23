@@ -88,10 +88,24 @@ async function moveToMainWindow(windowId) {
   const { littleWindows, lastNormalWindowId } = await getState();
   const info = littleWindows[windowId];
   if (!info) return;
-  const tab = await chrome.tabs.get(info.tabId);
-  const url = tab.url || tab.pendingUrl;
   const normals = await chrome.windows.getAll({ windowTypes: ["normal"] });
   const mainId = pickMainWindowId(normals, lastNormalWindowId);
+
+  // Best: move the live tab, so the page isn't reloaded. Chrome's API refuses tabs leaving popup windows; try anyway.
+  if (mainId != null) {
+    try {
+      await chrome.tabs.move(info.tabId, { windowId: mainId, index: -1 });
+      await chrome.tabs.update(info.tabId, { active: true });
+      post({ type: "log", message: "move: moved the live tab (no reload)" });
+      post({ type: "littleMoved", windowId });
+      return;
+    } catch (e) {
+      post({ type: "log", message: `move: live tab move refused (${e?.message ?? e}); reopening the URL instead` });
+    }
+  }
+
+  const tab = await chrome.tabs.get(info.tabId);
+  const url = tab.url || tab.pendingUrl;
   if (mainId != null) {
     await chrome.tabs.create({ windowId: mainId, url, active: true });
   } else {

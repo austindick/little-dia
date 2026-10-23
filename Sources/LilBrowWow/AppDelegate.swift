@@ -70,14 +70,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         moveToMain = MoveToMain(
+            sendMove: { [weak self] id in
+                guard let self else { return }
+                self.server.send(.move(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
+            },
+            showMainWindow: { [weak self] in
+                guard let self else { return }
+                self.browserControl.showMainWindow(bundleID: self.settings.browser.bundleID)
+            },
             closeNatively: { [weak self] id in self?.tracker.close(windowId: id) ?? false },
             closeViaExtension: { [weak self] id in
                 guard let self else { return }
                 self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
-            },
-            activateBrowser: { [weak self] in
-                guard let self else { return }
-                self.browserControl.showMainWindow(bundleID: self.settings.browser.bundleID)
             })
         installNativeHostManifests(applicationSupport: applicationSupport)
         statusMenu = StatusMenu(settings: settings, link: link)
@@ -115,7 +119,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { await focusReturn.handle(message) }
         case .littleMoved:
             Task { await focusReturn.handle(message) }
-            Task { await moveToMain.handle(message) }
+            moveToMain.handle(message)
+        case let .log(text):
+            logger.notice("extension: \(text, privacy: .public)")
         case let .copy(url):
             writeToPasteboard(url)
         default:
@@ -137,9 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func moveToMainWindow(_ windowId: Int) {
-        let bundleID = registry.info(for: windowId)?.browserBundleID ?? settings.browser.bundleID
-        server.send(.move(windowId: windowId), to: bundleID)
         overlay.hide()
+        moveToMain.start(windowId: windowId)
     }
 
     private static func describe(_ message: InboundMessage) -> String {
@@ -152,6 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .openFailed(requestId, error): return "openFailed request=\(requestId) \(error)"
         case let .hello(version): return "hello \(version)"
         case .copy: return "copy"
+        case .log: return "log"
         case .hostHello: return "hostHello"
         }
     }
