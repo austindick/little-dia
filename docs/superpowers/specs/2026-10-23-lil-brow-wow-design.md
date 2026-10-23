@@ -67,7 +67,8 @@ Three pieces:
 ### Edge behavior (my calls, accepted by the owner in playback)
 
 - **Profile:** little windows use the owner's **default Dia profile**, which is the one the extension is installed in. The menu shows which profile is connected.
-- **Dia not running:** launch Dia without bringing it to the front (`NSWorkspace.OpenConfiguration.activates = false`), wait for the extension to connect (time out after about 10 s), then open the little window.
+- **Dia not running** *(changed by the owner on 2026-10-23, during the build)*: open the link in Dia's main window the normal way. Little windows only appear once Dia is already running. The original plan, launching Dia in the background and then opening a little window, lost links: Dia accepts popups created while it is still starting up but never shows them.
+- **A little window that never reaches the screen:** if no new window of the requested width appears on the current desktop within about 2 s of the extension confirming it, the app closes that popup and opens the link in Dia normally. Dia is brought to the front only after the popup is on screen.
 - **Extension unreachable** (disabled, not installed, or timed out): open the link in Dia the normal way. **A link must never get lost.**
 - **Menu-bar menu (v1):**
   - on/off toggle (off sends every link straight to Dia normally)
@@ -130,7 +131,7 @@ Three pieces:
   3. Copy puts the current URL on the clipboard after navigating inside the little window.
   4. Move to Dia opens the page as a tab in the main window, closes the little window, and takes you to desktop 1.
   5. A `target=_blank` link inside the little window opens a second little window on desktop 2 with no desktop flash.
-  6. Quit Dia, then click a link. Dia launches and the little window appears.
+  6. Quit Dia, then click a link. Dia opens with the link in its main window, and no little window appears.
   7. Disable the extension, then click a link. It opens in Dia normally.
   8. Turn the menu-bar toggle off. Links open in Dia normally.
   9. `mailto:` and other non-web links are unaffected.

@@ -37,3 +37,10 @@ test("windowBounds reports the page area the browser was asked for", () => {
   assert.deepEqual(windowBounds({ left: 200, top: 78, width: 1000, height: 822 }, 72), { left: 200, top: 150, width: 1000, height: 750 });
   assert.deepEqual(windowBounds({ left: 200, top: 150, width: 1000, height: 750 }), { left: 200, top: 150, width: 1000, height: 750 });
 });
+
+test("reportedBounds falls back to the request when the browser reports a 0x0 window", async () => {
+  const { reportedBounds } = await import("../bridge-logic.js");
+  // Dia returns windows from create() with zero bounds.
+  assert.deepEqual(reportedBounds(bounds, { left: 0, top: 0, width: 0, height: 0 }), bounds);
+  assert.deepEqual(reportedBounds(bounds, { left: 300, top: 65, width: 1000, height: 822 }), { left: 300, top: 137, width: 1000, height: 750 });
+});

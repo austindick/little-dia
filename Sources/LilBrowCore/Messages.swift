@@ -19,6 +19,8 @@ public struct Bounds: Codable, Equatable, Sendable {
 public enum OutboundMessage: Equatable, Sendable {
     case open(requestId: String, url: URL, bounds: Bounds, focused: Bool)
     case move(windowId: Int)
+    /// Closes a little window the app gave up on (it never reached the screen).
+    case close(windowId: Int)
 }
 
 /// Messages the app receives on the bridge socket: the helper's `hostHello`, then everything the extension sends.
@@ -70,6 +72,8 @@ extension OutboundMessage: Codable {
                          bounds: try c.decode(Bounds.self, forKey: .bounds), focused: try c.decode(Bool.self, forKey: .focused))
         case "move":
             self = .move(windowId: try c.decode(Int.self, forKey: .windowId))
+        case "close":
+            self = .close(windowId: try c.decode(Int.self, forKey: .windowId))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Unknown outbound type \(other)")
         }
@@ -86,6 +90,9 @@ extension OutboundMessage: Codable {
             try c.encode(focused, forKey: .focused)
         case let .move(windowId):
             try c.encode("move", forKey: .type)
+            try c.encode(windowId, forKey: .windowId)
+        case let .close(windowId):
+            try c.encode("close", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
         }
     }

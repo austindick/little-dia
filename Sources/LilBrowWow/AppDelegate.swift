@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(_ message: InboundMessage, from bundleID: String) {
+        logger.notice("event \(Self.describe(message), privacy: .public)")
         registry.apply(message, from: bundleID)
         switch message {
         case let .littleBounds(_, bounds):
@@ -59,6 +60,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             break
         }
     }
+
+    private static func describe(_ message: InboundMessage) -> String {
+        switch message {
+        case let .opened(requestId, windowId, _, b): return "opened window=\(windowId) request=\(requestId ?? "-") bounds=\(b.left),\(b.top) \(b.width)x\(b.height)"
+        case let .littleBounds(windowId, b): return "littleBounds window=\(windowId) \(b.left),\(b.top) \(b.width)x\(b.height)"
+        case let .littleClosed(windowId): return "littleClosed window=\(windowId)"
+        case let .littleURL(windowId, _): return "littleURL window=\(windowId)"
+        case let .openFailed(requestId, error): return "openFailed request=\(requestId) \(error)"
+        case let .hello(version): return "hello \(version)"
+        case .copy: return "copy"
+        case .hostHello: return "hostHello"
+        }
+    }
+
 
     /// The screen the pointer is on, so the little window opens where the user is looking.
     private static func currentScreen() -> ScreenContext {

@@ -1,8 +1,10 @@
 // Lil Brow Wow service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.lilbrowwow.bridge`.
-import { popupCreateOptions, pickMainWindowId, windowBounds, chromeHeight } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, windowBounds, chromeHeight, reportedBounds } from "./bridge-logic.js";
 
 const HOST = "com.lilbrowwow.bridge";
+// Height Dia adds above a popup's page area (measured 2026-10-23); used when Dia doesn't report window sizes.
+const DIA_CHROME_HEIGHT = 72;
 let port = null;
 
 // ---- Connection to the app ------------------------------------------------------------------------------------
@@ -61,9 +63,10 @@ async function updateLittleWindows(change) {
 
 async function openLittleWindow({ url, bounds, focused = true, requestId }) {
   const win = await chrome.windows.create(popupCreateOptions({ url, bounds, focused }));
-  const addedHeight = chromeHeight(bounds.height, win.height);
+  // Dia reports 0x0 here; fall back to the request and assume Dia's usual title-bar height until a real size arrives.
+  const addedHeight = win.height > 0 ? chromeHeight(bounds.height, win.height) : DIA_CHROME_HEIGHT;
   await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: addedHeight }; });
-  const opened = { type: "opened", windowId: win.id, url, bounds: windowBounds(win, addedHeight) };
+  const opened = { type: "opened", windowId: win.id, url, bounds: reportedBounds(bounds, win) };
   if (requestId) opened.requestId = requestId;
   post(opened);
   return win;
@@ -97,6 +100,10 @@ async function handleAppMessage(msg) {
       break;
     case "move":
       await moveToMainWindow(msg.windowId);
+      break;
+    case "close":
+      // The app gave up on this window (it never reached the screen) and opened the link normally instead.
+      await chrome.windows.remove(msg.windowId).catch(() => {});
       break;
     default:
       console.warn("Lil Brow Wow: unknown message from app", msg);

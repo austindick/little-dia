@@ -13,6 +13,10 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(String(decoding: try MessageCoding.encode(OutboundMessage.move(windowId: 42)), as: UTF8.self) == #"{"type":"move","windowId":42}"#)
 }
 
+@Test func encodesCloseExactly() throws {
+    #expect(String(decoding: try MessageCoding.encode(OutboundMessage.close(windowId: 42)), as: UTF8.self) == #"{"type":"close","windowId":42}"#)
+}
+
 @Test func decodesOpenedWithoutRequestId() throws {
     let json = #"{"type":"opened","windowId":42,"url":"https://github.com/pulls","bounds":{"left":300,"top":137,"width":1000,"height":750}}"#
     #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .opened(requestId: nil, windowId: 42, url: URL(string: "https://github.com/pulls")!, bounds: b))

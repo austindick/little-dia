@@ -30,3 +30,12 @@ export function chromeHeight(requestedHeight, createdHeight) {
 export function windowBounds(w, chrome = 0) {
   return { left: w.left, top: w.top + chrome, width: w.width, height: w.height - chrome };
 }
+
+/**
+ * Page-area bounds to report for a window the browser just created. Dia returns 0x0 from create(), in which case the
+ * requested bounds are the best answer.
+ */
+export function reportedBounds(requested, win) {
+  if (!(win.width > 0 && win.height > 0)) return requested;
+  return windowBounds(win, chromeHeight(requested.height, win.height));
+}

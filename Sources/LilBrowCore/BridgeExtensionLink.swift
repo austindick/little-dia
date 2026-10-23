@@ -26,6 +26,7 @@ public protocol ExtensionLink: AnyObject {
     func isReady(browser: String) -> Bool
     func waitUntilReady(browser: String, timeout: Duration) async -> Bool
     func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult
+    func close(windowId: Int, browser: String)
 }
 
 /// `ExtensionLink` over the bridge socket: sends `open`, then waits for the matching `opened` / `openFailed`.
@@ -70,6 +71,10 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
                 self.pendingOpens.removeValue(forKey: request.requestId)?.resume(returning: .timedOut)
             }
         }
+    }
+
+    public func close(windowId: Int, browser: String) {
+        server.send(.close(windowId: windowId), to: browser)
     }
 
     public func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String) {

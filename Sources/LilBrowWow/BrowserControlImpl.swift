@@ -11,19 +11,6 @@ final class BrowserControlImpl: BrowserControl {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
 
-    func launchInBackground(bundleID: String) async -> Bool {
-        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return false }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        do {
-            _ = try await NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
-            return true
-        } catch {
-            logger.error("launching \(bundleID, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
-    }
-
     func openNormally(_ url: URL, bundleID: String) {
         guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
             logger.error("\(bundleID, privacy: .public) is not installed; cannot open link")
@@ -36,5 +23,23 @@ final class BrowserControlImpl: BrowserControl {
 
     func activate(bundleID: String) {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.activate()
+    }
+
+    func onScreenWindows(bundleID: String) -> [WindowCandidate<Int>] {
+        windows(of: bundleID, options: [.optionOnScreenOnly, .excludeDesktopElements]).map { WindowCandidate(id: $0.number, frame: $0.frame) }
+    }
+
+    /// The browser's normal-level windows from the window server (top-left coordinates).
+    private func windows(of bundleID: String, options: CGWindowListOption) -> [(number: Int, frame: CGRect)] {
+        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.processIdentifier else { return [] }
+        let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+        return raw.compactMap { info in
+            guard (info[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                  (info[kCGWindowLayer as String] as? Int) == 0,
+                  let number = info[kCGWindowNumber as String] as? Int,
+                  let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
+                  let frame = CGRect(dictionaryRepresentation: boundsInfo) else { return nil }
+            return (number, frame)
+        }
     }
 }
