@@ -184,17 +184,3 @@ chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
   await chrome.tabs.remove(details.tabId);
   await openFromLittleWindow(sourceTab.windowId, details.url);
 });
-
-// ---- Keyboard shortcuts -----------------------------------------------------------------------------------------
-
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "copy-url") {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    const url = tab?.url || tab?.pendingUrl;
-    if (url) post({ type: "copy", url });   // the app writes the clipboard
-  } else if (command === "move-to-main") {
-    const win = await chrome.windows.getLastFocused();
-    const { littleWindows } = await getState();
-    if (littleWindows[win.id]) await moveToMainWindow(win.id);
-  }
-});

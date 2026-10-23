@@ -16,6 +16,8 @@ final class LittleWindowTracker {
     private struct Entry {
         let element: AXUIElement
         var frame: CGRect
+        /// The window server's number for this window, used to follow it live during drags.
+        var windowNumber: CGWindowID?
     }
 
     private let onChange: (TrackedWindow?) -> Void
@@ -25,6 +27,8 @@ final class LittleWindowTracker {
     private var observer: AXObserver?
     private var lastReported: TrackedWindow?
     private var workspaceObservers: [NSObjectProtocol] = []
+    private var followTimer: Timer?
+    private var mouseWasDown = false
 
     init(onChange: @escaping (TrackedWindow?) -> Void) {
         self.onChange = onChange
@@ -68,6 +72,13 @@ final class LittleWindowTracker {
                 }
                 logger.notice("tracking little window \(windowId) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
                 recompute()
+                // The window is still animating open and the browser is still taking focus: look again shortly.
+                Task { @MainActor [weak self] in
+                    for delay in [150, 400, 800] as [Int] {
+                        try? await Task.sleep(for: .milliseconds(delay))
+                        self?.recompute()
+                    }
+                }
                 return true
             }
             try? await Task.sleep(for: .milliseconds(50))
@@ -128,15 +139,64 @@ final class LittleWindowTracker {
             let focusedID = focusedWindow(of: pid).flatMap { focused in entries.first { CFEqual($0.value.element, focused) }?.key }
             if let id = OverlayVisibility.windowToShow(frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
                                                        browserPID: pid, focusedWindow: focusedID, tracked: Set(entries.keys)),
-               let entry = entries[id], let frame = frame(of: entry.element) ?? Optional(entry.frame),
-               isOnThisDesktop(frame, pid: pid) {
-                entries[id]?.frame = frame
-                visible = TrackedWindow(windowId: id, frameTopLeft: frame)
+               let entry = entries[id],
+               let number = entry.windowNumber ?? onThisDesktop(frame(of: entry.element) ?? entry.frame, pid: pid),
+               let server = serverInfo(of: number), server.onScreen {
+                // The window server's frame is live; Accessibility's can be stale mid-drag.
+                entries[id]?.frame = server.frame
+                entries[id]?.windowNumber = number
+                visible = TrackedWindow(windowId: id, frameTopLeft: server.frame)
             }
         }
+        report(visible)
+    }
+
+    private func report(_ visible: TrackedWindow?) {
+        if visible == nil { stopFollowing() } else { startFollowing() }
         guard visible != lastReported else { return }
         lastReported = visible
         onChange(visible)
+    }
+
+    // MARK: Following drags
+    // Accessibility "moved" notifications arrive late during a drag, but the window server knows where the window is
+    // at every frame. While the buttons are showing and the mouse is held down, follow the window from there.
+
+    private func startFollowing() {
+        guard followTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.followTick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        followTimer = timer
+    }
+
+    private func stopFollowing() {
+        followTimer?.invalidate()
+        followTimer = nil
+        mouseWasDown = false
+    }
+
+    private func followTick() {
+        let mouseDown = NSEvent.pressedMouseButtons & 1 == 1
+        defer { mouseWasDown = mouseDown }
+        if !mouseDown {
+            if mouseWasDown { recompute() }   // drag ended: settle on the final position
+            return
+        }
+        guard let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
+              let frame = serverInfo(of: number)?.frame, frame != shown.frameTopLeft else { return }
+        entries[shown.windowId]?.frame = frame
+        let moved = TrackedWindow(windowId: shown.windowId, frameTopLeft: frame)
+        lastReported = moved
+        onChange(moved)
+    }
+
+    private func serverInfo(of number: CGWindowID) -> (frame: CGRect, onScreen: Bool)? {
+        guard let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], number) as? [[String: Any]])?.first,
+              let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
+              let frame = CGRect(dictionaryRepresentation: boundsInfo) else { return nil }
+        return (frame, info[kCGWindowIsOnscreen as String] as? Bool ?? false)
     }
 
     private func axWindows(of app: AXUIElement) -> [AXUIElement] {
@@ -163,14 +223,19 @@ final class LittleWindowTracker {
         return CGRect(origin: position, size: size)
     }
 
-    /// Accessibility can't say which desktop a window is on; the window server's on-screen list can.
-    private func isOnThisDesktop(_ frame: CGRect, pid: pid_t) -> Bool {
+    /// Accessibility can't say which desktop a window is on; the window server's on-screen list can. Returns the
+    /// window server's number for the window if it is on this desktop. Loose match: the window may still be animating.
+    private func onThisDesktop(_ frame: CGRect, pid: pid_t) -> CGWindowID? {
         let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-        return raw.contains { info in
+        for info in raw {
             guard (info[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                  let number = info[kCGWindowNumber as String] as? Int,
                   let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsInfo) else { return false }
-            return abs(bounds.minX - frame.minX) <= 2 && abs(bounds.minY - frame.minY) <= 2 && abs(bounds.width - frame.width) <= 2
+                  let bounds = CGRect(dictionaryRepresentation: boundsInfo) else { continue }
+            if abs(bounds.minX - frame.minX) <= 12 && abs(bounds.maxY - frame.maxY) <= 12 && abs(bounds.width - frame.width) <= 24 {
+                return CGWindowID(number)
+            }
         }
+        return nil
     }
 }
