@@ -6,3 +6,4 @@ xcuserdata/
 .superpowers/
 spike/*.app/
 spike/result.log
+.build/
