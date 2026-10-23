@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var router: LinkRouter!
     private var statusMenu: StatusMenu!
     private var focusReturn: FocusReturn<NSRunningApplication>!
+    private var tracker: LittleWindowTracker!
+    private var overlay: TitleBarOverlay!
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -55,6 +57,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             MainActor.assumeIsolated { self?.focusReturn.appActivated(app) }
         }
+        overlay = TitleBarOverlay(browserName: settings.browser.name,
+                                  onCopy: { [weak self] id in self?.copyURL(ofLittleWindow: id) },
+                                  onMove: { [weak self] id in self?.moveToMainWindow(id) })
+        tracker = LittleWindowTracker { [weak self] window in
+            guard let self else { return }
+            if let window {
+                self.overlay.show(window, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+            } else {
+                self.overlay.hide()
+            }
+        }
         installNativeHostManifests(applicationSupport: applicationSupport)
         statusMenu = StatusMenu(settings: settings, link: link)
     }
@@ -80,16 +93,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.notice("event \(Self.describe(message), privacy: .public)")
         registry.apply(message, from: bundleID)
         switch message {
+        case let .opened(_, windowId, _, bounds):
+            if let pid = server.browserPID(for: bundleID) {
+                Task { _ = await tracker.track(windowId: windowId, bounds: bounds, browserPID: pid) }
+            }
         case let .littleBounds(_, bounds):
             settings.rememberSize(bounds)
-        case .littleClosed, .littleMoved:
+        case let .littleClosed(windowId):
+            tracker.untrack(windowId: windowId)
+            Task { await focusReturn.handle(message) }
+        case .littleMoved:
             Task { await focusReturn.handle(message) }
         case let .copy(url):
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+            writeToPasteboard(url)
         default:
             break
         }
+    }
+
+    // MARK: Title-bar buttons
+
+    private func copyURL(ofLittleWindow windowId: Int) {
+        guard let url = registry.info(for: windowId)?.url else { return }
+        writeToPasteboard(url)
+    }
+
+    private func writeToPasteboard(_ url: URL) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        if overlay.isVisible { overlay.flashCopied() }
+    }
+
+    private func moveToMainWindow(_ windowId: Int) {
+        let bundleID = registry.info(for: windowId)?.browserBundleID ?? settings.browser.bundleID
+        server.send(.move(windowId: windowId), to: bundleID)
+        tracker.untrack(windowId: windowId)
     }
 
     private static func describe(_ message: InboundMessage) -> String {
