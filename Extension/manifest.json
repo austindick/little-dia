@@ -41,7 +41,7 @@
     "move-to-main": {
       "suggested_key": {
         "default": "Alt+Shift+O",
-        "mac": "Alt+Command+O"
+        "mac": "Alt+Shift+O"
       },
       "description": "Move little window to main window"
     }
