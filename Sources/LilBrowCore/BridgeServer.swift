@@ -8,7 +8,7 @@ public protocol BridgeServerDelegate: AnyObject {
 }
 
 /// The Unix-socket server inside the app. Each `lilbrow-host` helper (one per browser profile running the extension)
-/// connects, introduces itself with `hostHello`, and becomes **ready** once the extension's `hello` arrives.
+/// connects and introduces itself with `hostHello`, which makes it **ready**.
 /// Socket reads happen on a private queue; all state and delegate callbacks are on the main actor.
 @MainActor
 public final class BridgeServer {
@@ -47,7 +47,7 @@ public final class BridgeServer {
         source.setCancelHandler { close(fd) }
         source.resume()
         listenSource = source
-        logger.info("listening on \(self.socketPath, privacy: .public)")
+        logger.notice("listening on \(self.socketPath, privacy: .public)")
     }
 
     public func stop() {
@@ -118,7 +118,7 @@ public final class BridgeServer {
     private func remove(_ id: Int, notify: Bool) {
         guard let connection = connections.removeValue(forKey: id) else { return }
         connection.source?.cancel()
-        logger.info("connection closed (\(connection.browserBundleID ?? "unknown", privacy: .public))")
+        logger.notice("connection closed (\(connection.browserBundleID ?? "unknown", privacy: .public))")
         if notify { delegate?.bridgeConnectionsChanged(self) }
     }
 
@@ -131,20 +131,16 @@ public final class BridgeServer {
             logger.error("skipping undecodable frame: \(String(decoding: payload, as: UTF8.self), privacy: .public)")
             return
         }
-        switch message {
-        case let .hostHello(bundleID, pid):
+        if case let .hostHello(bundleID, pid) = message {
+            // The helper only runs while the extension's native port is open, so its hello means the extension
+            // is reachable. (The extension's own `hello` may arrive before the helper connects and be dropped.)
             connection.browserBundleID = bundleID
             connection.browserPID = pid
+            readySequence += 1
+            connection.readyOrder = readySequence
+            logger.notice("extension ready in \(bundleID, privacy: .public) (pid \(pid))")
+            delegate?.bridgeConnectionsChanged(self)
             return
-        case .hello:
-            if connection.browserBundleID != nil, connection.readyOrder == nil {
-                readySequence += 1
-                connection.readyOrder = readySequence
-                logger.info("extension ready in \(connection.browserBundleID!, privacy: .public)")
-                delegate?.bridgeConnectionsChanged(self)
-            }
-        default:
-            break
         }
         delegate?.bridge(self, didReceive: message, fromBrowser: connection.browserBundleID ?? "unknown")
     }

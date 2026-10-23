@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             for url in urls {
                 let outcome = await router.route(url)
-                logger.info("routed \(url.absoluteString, privacy: .private) → \(String(describing: outcome), privacy: .public)")
+                logger.notice("routed \(url.absoluteString, privacy: .private) → \(String(describing: outcome), privacy: .public)")
             }
         }
     }
@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for adapter in BrowserAdapter.all where NSWorkspace.shared.urlForApplication(withBundleIdentifier: adapter.bundleID) != nil {
             do {
                 let files = try NativeHostManifest.install(hostExecutablePath: hostPath, adapter: adapter, applicationSupport: applicationSupport)
-                logger.info("installed native host manifest for \(adapter.name, privacy: .public): \(files.map(\.path).joined(separator: ", "), privacy: .public)")
+                logger.notice("installed native host manifest for \(adapter.name, privacy: .public): \(files.map(\.path).joined(separator: ", "), privacy: .public)")
             } catch {
                 logger.error("installing native host manifest for \(adapter.name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             }

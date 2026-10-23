@@ -52,13 +52,12 @@ private final class TestClient: @unchecked Sendable {
     return (server, path)
 }
 
-@MainActor @Test func becomesReadyAfterHostHelloAndHello() async throws {
+/// The helper only runs while the extension's native port is open, so its hostHello alone means "ready".
+/// (The extension's own hello can arrive before the helper reaches the app and be dropped.)
+@MainActor @Test func becomesReadyOnHostHelloAlone() async throws {
     let (server, path) = try startServer(); defer { server.stop() }
     let client = try TestClient(path: path)
     try client.send(.hostHello(browserBundleID: browser, browserPID: 99))
-    try await Task.sleep(for: .milliseconds(200))
-    #expect(!server.isReady(browser: browser))
-    try client.send(.hello(extensionVersion: "0.1.0"))
     #expect(await until { server.isReady(browser: browser) })
     #expect(server.browserPID(for: browser) == 99)
 }

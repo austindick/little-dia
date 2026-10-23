@@ -64,7 +64,7 @@ public final class LinkRouter {
         let bundleID = settings.browser.bundleID
 
         func fallback(_ reason: FallbackReason) -> RouteOutcome {
-            logger.info("opening normally (\(String(describing: reason), privacy: .public))")
+            logger.notice("opening normally (\(String(describing: reason), privacy: .public))")
             browser.openNormally(url, bundleID: bundleID)
             return .openedNormally(reason)
         }
