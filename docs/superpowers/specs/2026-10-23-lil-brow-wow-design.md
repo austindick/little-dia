@@ -33,7 +33,7 @@ What the owner told us:
 - **Dia supports Chrome extensions and native messaging.** Reported in anthropics/claude-code#34830. Dia is built on Chromium (`ArcCore.framework`) and keeps a `SingletonSocket`.
 - **Dia has an AppleScript dictionary** (`/Applications/Dia.app/Contents/Resources/Dia.sdef`). It covers windows, tabs (URL is read/write), profiles, and running JavaScript. Windows have **no bounds property**, so AppleScript can't position windows.
 - **Dia may be building this itself.** The Dia 1.54.2 binary contains internal names such as `littleBrowserWindow`, `openExternalLinksInLittleBrowserEnabled`, `globalLittleBrowserHotkeyEnabled` and `littleBrowserMoveButton`. There is no user-visible text and no public announcement, so it's probably unfinished or switched off by a feature flag. If Dia ships it, Lil Brow Wow is still useful for other browsers.
-- **Chrome's extension API can't move a tab out of a popup window.** `tabs.move` only works between "normal" windows. Moving to Dia therefore means reopening the URL in the main window, which reloads the page.
+- **Chrome's extension API can't move a tab out of a popup window.** `tabs.move` only works between "normal" windows. *Update, 2026-10-23:* Dia does not enforce this. A live `tabs.move` from the little window into the main window works, so the page moves without reloading.
 
 ## How it works (the decided shape)
 
@@ -56,8 +56,10 @@ Three pieces:
 - **Dia's own popup UI.** Title bar with the page title, a read-only address row, and the download icon.
 - **Two buttons drawn by the menu-bar app, sitting on the right side of the popup's title bar:** `[⧉ Copy]` and `[↗ Dia]`. They follow the window when it moves or resizes, and they show **only while that little window is the frontmost window**, so they never float over other apps. This needs macOS **Accessibility** permission. The owner picked this over an in-page floating pill and over "keyboard only," because it is closest to Little Arc.
 - **Copy:** copies the little window's *current* URL (after any navigation) to the clipboard, with brief "Copied" feedback.
-- **Move to Dia:** opens the current URL as a new, focused tab in the main Dia window (the most recently focused normal window), closes the little window, and takes you to Dia. Switching desktops here is intended. The page reloads, so scroll position and unsent form text are lost. That is accepted.
-- **Keyboard shortcuts** for both actions, defined as extension commands. The builder picks keys that don't collide with Dia's own shortcuts.
+- **Move to Dia** *(as built)*: switches you to Dia's main window right away. Meanwhile the extension moves the live tab into that window (the most recently focused normal window), so nothing reloads; if Dia refuses, it reopens the URL there instead. The app then closes the little window by pressing its close button through Accessibility, because Dia ignores the extension API's close and focus requests for popups. Switching desktops here is intended.
+- **While a little window is dragged or resized** *(owner's choice during the build)*: the buttons hide and fade back in where it ends up. Buttons drawn by another app can't move in lockstep with the window, and Dia's address bar can't take extension buttons.
+- **Closing a little window** *(added during the build)*: focus returns to the app the link was clicked in, unless the page moved to the main window, you've already switched apps, or another Dia window is on this desktop.
+- **Keyboard shortcuts:** dropped for v1 at the owner's request; Dia didn't fire them anyway.
 - **Links inside the little window:**
   - Ordinary links navigate inside the same little window.
   - Links that would open a **new tab** (`target=_blank`, ⌘-click, a doc linking to another doc) open **another little window on the current desktop**. They never go to a tab in the main window (owner's choice). Approach: a content script in little windows catches those clicks first and asks the extension for a new little window. Page-script `window.open` calls that would become tabs are caught with `webNavigation.onCreatedNavigationTarget` and moved. This must be checked for desktop switches.
@@ -87,7 +89,6 @@ Three pieces:
 - Other browsers: Chrome, Brave, Edge, Zen, Firefox. Keep every Dia-specific detail (bundle ID, native-messaging folder, popup quirks) behind one small "browser adapter" seam so these can be added. Chromium-family browsers should need only an adapter. Zen and Firefox need a Firefox build of the extension, since `browser.windows.create({type:"popup"})` and native messaging both exist there.
 - Per-site rules, such as "always send zoom.us straight to Dia."
 - Links clicked inside a **full-screen app**. macOS won't put another app's normal window on a full-screen desktop, so the little window will probably open on a regular desktop. The owner rarely uses full screen, so this is a known limitation: document it, and don't engineer around it.
-- Keeping page state when moving to Dia.
 - A built-in browser engine. **Rejected:** it would need a separate set of logins.
 - The Mac App Store. **Ruled out:** App Store apps must be sandboxed, and the sandbox blocks both the Accessibility-based title-bar buttons and writing the native-messaging file into Dia's folder.
 
