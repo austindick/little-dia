@@ -35,21 +35,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         router = LinkRouter(settings: settings, link: link, browser: browserControl, screen: Self.currentScreen)
         focusReturn = FocusReturn(
+            isOwnOrBrowser: { [settings] app in
+                app == NSRunningApplication.current || app.bundleIdentifier == settings?.browser.bundleID
+            },
             browserIsFrontmost: { [settings] in NSWorkspace.shared.frontmostApplication?.bundleIdentifier == settings?.browser.bundleID },
             browserHasWindowOnThisDesktop: { [browserControl, settings] in
                 guard let bundleID = settings?.browser.bundleID else { return false }
                 return browserControl.onScreenWindows(bundleID: bundleID).contains { $0.frame.width > 200 && $0.frame.height > 200 }
             },
             activate: { $0.activate() })
+        focusReturn.onDecision = { [logger, browserControl, settings] reason in
+            let windows = browserControl.onScreenWindows(bundleID: settings?.browser.bundleID ?? "")
+                .map { "#\($0.id) \(Int($0.frame.minX)),\(Int($0.frame.minY)) \(Int($0.frame.width))x\(Int($0.frame.height))" }
+            let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+            logger.notice("focus return: \(reason, privacy: .public); frontmost=\(front, privacy: .public) browser windows here=[\(windows.joined(separator: "; "), privacy: .public)]")
+        }
+        if let frontmost = NSWorkspace.shared.frontmostApplication { focusReturn.appActivated(frontmost) }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            MainActor.assumeIsolated { self?.focusReturn.appActivated(app) }
+        }
         installNativeHostManifests(applicationSupport: applicationSupport)
         statusMenu = StatusMenu(settings: settings, link: link)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         // The app the link was clicked in; focus goes back there when the little window closes.
-        let cameFrom = NSWorkspace.shared.frontmostApplication.flatMap { app in
-            app.bundleIdentifier == settings.browser.bundleID || app == NSRunningApplication.current ? nil : app
-        }
+        let cameFrom = focusReturn.origin(frontmost: NSWorkspace.shared.frontmostApplication)
+        logger.notice("link arrived; frontmost=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?", privacy: .public) cameFrom=\(cameFrom?.localizedName ?? "none", privacy: .public)")
         Task {
             for url in urls {
                 let outcome = await router.route(url)
@@ -69,11 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch message {
         case let .littleBounds(_, bounds):
             settings.rememberSize(bounds)
-        case .littleClosed:
-            // Give the window server a moment to take the closed window off screen before looking.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.focusReturn.handle(message) }
-        case .littleMoved:
-            focusReturn.handle(message)
+        case .littleClosed, .littleMoved:
+            Task { await focusReturn.handle(message) }
         default:
             break
         }
