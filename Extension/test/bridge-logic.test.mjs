@@ -1,0 +1,39 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight } from "../bridge-logic.js";
+
+const bounds = { left: 300, top: 137, width: 1000, height: 750 };
+
+test("popupCreateOptions maps fields exactly", () => {
+  assert.deepEqual(popupCreateOptions({ url: "https://github.com/", bounds, focused: true }), {
+    type: "popup", url: "https://github.com/", left: 300, top: 137, width: 1000, height: 750, focused: true,
+  });
+});
+
+test("pickMainWindowId prefers the last normal window", () => {
+  assert.equal(pickMainWindowId([{ id: 1 }, { id: 2, focused: true }], 1), 1);
+});
+
+test("pickMainWindowId falls back to the focused window, then the first", () => {
+  assert.equal(pickMainWindowId([{ id: 1 }, { id: 2, focused: true }], 9), 2);
+  assert.equal(pickMainWindowId([{ id: 1 }, { id: 2 }], null), 1);
+});
+
+test("pickMainWindowId returns null with no normal windows", () => {
+  assert.equal(pickMainWindowId([], 1), null);
+});
+
+test("cascadeBounds offsets by 30", () => {
+  assert.deepEqual(cascadeBounds(bounds), { left: 330, top: 167, width: 1000, height: 750 });
+});
+
+test("chromeHeight is the extra height the browser added above the page area", () => {
+  assert.equal(chromeHeight(750, 822), 72);   // Dia (2026-10-23 spike)
+  assert.equal(chromeHeight(750, 750), 0);    // browsers that report the page area
+  assert.equal(chromeHeight(750, 700), 0);    // clamped by a small screen: never negative
+});
+
+test("windowBounds reports the page area the browser was asked for", () => {
+  assert.deepEqual(windowBounds({ left: 200, top: 78, width: 1000, height: 822 }, 72), { left: 200, top: 150, width: 1000, height: 750 });
+  assert.deepEqual(windowBounds({ left: 200, top: 150, width: 1000, height: 750 }), { left: 200, top: 150, width: 1000, height: 750 });
+});
