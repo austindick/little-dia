@@ -32,6 +32,8 @@ public enum InboundMessage: Equatable, Sendable {
     case littleURL(windowId: Int, url: URL)
     case littleBounds(windowId: Int, bounds: Bounds)
     case littleClosed(windowId: Int)
+    /// Sent just before a little window is closed because its page moved to the main window.
+    case littleMoved(windowId: Int)
     case copy(url: URL)
 }
 
@@ -119,6 +121,8 @@ extension InboundMessage: Codable {
             self = .littleBounds(windowId: try c.decode(Int.self, forKey: .windowId), bounds: try c.decode(Bounds.self, forKey: .bounds))
         case "littleClosed":
             self = .littleClosed(windowId: try c.decode(Int.self, forKey: .windowId))
+        case "littleMoved":
+            self = .littleMoved(windowId: try c.decode(Int.self, forKey: .windowId))
         case "copy":
             self = .copy(url: try c.decodeURL(.url))
         case let other:
@@ -156,6 +160,9 @@ extension InboundMessage: Codable {
             try c.encode(bounds, forKey: .bounds)
         case let .littleClosed(windowId):
             try c.encode("littleClosed", forKey: .type)
+            try c.encode(windowId, forKey: .windowId)
+        case let .littleMoved(windowId):
+            try c.encode("littleMoved", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
         case let .copy(url):
             try c.encode("copy", forKey: .type)

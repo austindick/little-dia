@@ -5,7 +5,8 @@ import Testing
 
 private let github = URL(string: "https://github.com/pulls")!
 private let primary = ScreenContext(visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 976), primaryScreenHeight: 1000)
-private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .milliseconds(100), visibility: .milliseconds(200))
+private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .milliseconds(300), visibility: .milliseconds(200),
+                                  pollInterval: .milliseconds(5))
 
 @MainActor private final class FakeSettings: LittleSettings {
     var isEnabled = true
@@ -21,6 +22,10 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     var closeCalls: [Int] = []
     /// Dia at cold start: the extension reports success but no window ever reaches the screen.
     var opensPhantomWindow = false
+    /// Width of the window as it first appears (Dia animates it open slightly narrower).
+    var appearingWidthDelta = 0
+    /// How long the extension takes to confirm after the window is on screen.
+    var ackDelay: Duration = .zero
     weak var screen: FakeBrowser?
 
     func isReady(browser: String) -> Bool { ready }
@@ -32,9 +37,12 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     }
     func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult {
         openCalls.append(request)
+        screen?.calls.append("open")
         if case .opened = result, !opensPhantomWindow {
-            screen?.onScreen.append(WindowCandidate(id: 500 + openCalls.count, frame: CGRect(x: CGFloat(request.bounds.left), y: CGFloat(request.bounds.top - 72), width: CGFloat(request.bounds.width), height: CGFloat(request.bounds.height + 72))))
+            screen?.onScreen.append(WindowCandidate(id: 500 + openCalls.count, frame: CGRect(x: CGFloat(request.bounds.left), y: CGFloat(request.bounds.top - 72), width: CGFloat(request.bounds.width - appearingWidthDelta), height: CGFloat(request.bounds.height + 72))))
         }
+        if ackDelay > .zero { try? await Task.sleep(for: ackDelay) }
+        screen?.calls.append("ack")
         return result
     }
     func close(windowId: Int, browser: String) { closeCalls.append(windowId) }
@@ -44,12 +52,13 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     var running = true
     var openNormallyCalls: [URL] = []
     var activateCalls: [String] = []
+    var calls: [String] = []
     /// On-screen windows on the current desktop; starts with the user's own main window.
     var onScreen = [WindowCandidate(id: 1, frame: CGRect(x: 0, y: 33, width: 1728, height: 1028))]
 
     func isRunning(bundleID: String) -> Bool { running }
     func openNormally(_ url: URL, bundleID: String) { openNormallyCalls.append(url) }
-    func activate(bundleID: String) { activateCalls.append(bundleID) }
+    func activate(bundleID: String) { activateCalls.append(bundleID); calls.append("activate") }
     func onScreenWindows(bundleID: String) -> [WindowCandidate<Int>] { onScreen }
 }
 
@@ -128,4 +137,18 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     #expect(link.closeCalls == [42])
     #expect(browser.openNormallyCalls == [github])
     #expect(browser.activateCalls.isEmpty)
+}
+
+@MainActor @Test func activatesAsSoonAsTheWindowAppearsWithoutWaitingForTheAck() async {
+    let (router, _, link, browser) = makeRouter()
+    link.ackDelay = .milliseconds(100)
+    #expect(await router.route(github) == .little(windowId: 42))
+    #expect(browser.calls == ["open", "activate", "ack"])
+}
+
+@MainActor @Test func countsAWindowStillAnimatingOpen() async {   // Dia's popup starts ~16pt narrower
+    let (router, _, link, browser) = makeRouter()
+    link.appearingWidthDelta = 16
+    #expect(await router.route(github) == .little(windowId: 42))
+    #expect(browser.activateCalls == ["company.thebrowser.dia"])
 }

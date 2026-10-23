@@ -22,6 +22,10 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .opened(requestId: nil, windowId: 42, url: URL(string: "https://github.com/pulls")!, bounds: b))
 }
 
+@Test func decodesLittleMoved() throws {
+    #expect(try MessageCoding.decodeInbound(Data(#"{"type":"littleMoved","windowId":42}"#.utf8)) == .littleMoved(windowId: 42))
+}
+
 @Test func rejectsUnknownType() {
     #expect(throws: (any Error).self) { try MessageCoding.decodeInbound(Data(#"{"type":"bogus"}"#.utf8)) }
 }

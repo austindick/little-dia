@@ -86,6 +86,7 @@ async function moveToMainWindow(windowId) {
   } else {
     await chrome.windows.create({ type: "normal", url, focused: true });
   }
+  post({ type: "littleMoved", windowId });
   await chrome.windows.remove(windowId);
 }
 

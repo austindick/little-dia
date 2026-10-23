@@ -21,11 +21,16 @@ public struct RouterTimeouts: Sendable {
     /// How long the popup has to reach the screen before the link is opened normally instead. (Dia accepts popups
     /// created while it is still starting up but never shows them.)
     public var visibility: Duration
+    /// How often to look for the popup. The browser is brought forward the moment it appears, so this is most of
+    /// the time the popup spends drawn behind the current app.
+    public var pollInterval: Duration
 
-    public init(runningToReady: Duration = .seconds(2), openAck: Duration = .seconds(4), visibility: Duration = .seconds(2)) {
+    public init(runningToReady: Duration = .seconds(2), openAck: Duration = .seconds(4), visibility: Duration = .seconds(2),
+                pollInterval: Duration = .milliseconds(15)) {
         self.runningToReady = runningToReady
         self.openAck = openAck
         self.visibility = visibility
+        self.pollInterval = pollInterval
     }
 }
 
@@ -81,19 +86,38 @@ public final class LinkRouter {
 
         let bounds = ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: screen())
         let windowsBefore = Set(browser.onScreenWindows(bundleID: bundleID).map(\.id))
+        // Dia animates the popup open from slightly narrower than requested, so allow 5%.
+        let isTheNewPopup: (WindowCandidate<Int>) -> Bool = {
+            !windowsBefore.contains($0.id) && abs($0.frame.width - CGFloat(bounds.width)) <= CGFloat(bounds.width) * 0.05
+        }
         let request = OpenRequest(requestId: makeRequestID(), url: url, bounds: bounds, focused: true)
-        switch await link.open(request, browser: bundleID, timeout: timeouts.openAck) {
-        case let .opened(windowId):
-            let onScreen = await poll(for: timeouts.visibility) {
-                browser.onScreenWindows(bundleID: bundleID).contains {
-                    !windowsBefore.contains($0.id) && abs($0.frame.width - CGFloat(bounds.width)) <= 6
-                }
+
+        // Watch for the popup while the extension is still answering, and bring the browser forward the instant it
+        // appears: the popup is drawn behind the current app until then.
+        let ack = AckBox()
+        let link = self.link, timeouts = self.timeouts
+        let ackTask = Task { @MainActor in
+            let result = await link.open(request, browser: bundleID, timeout: timeouts.openAck)
+            ack.result = result
+            return result
+        }
+        var appeared = false
+        _ = await poll(for: timeouts.visibility, every: timeouts.pollInterval) {
+            if browser.onScreenWindows(bundleID: bundleID).contains(where: isTheNewPopup) {
+                appeared = true
+                return true
             }
-            guard onScreen else {
+            if let result = ack.result, case .opened = result { return false }
+            return ack.result != nil   // the extension already said no
+        }
+        if appeared { browser.activate(bundleID: bundleID) }
+
+        switch await ackTask.value {
+        case let .opened(windowId):
+            guard appeared else {
                 link.close(windowId: windowId, browser: bundleID)
                 return fallback(.notVisible)
             }
-            browser.activate(bundleID: bundleID)
             return .little(windowId: windowId)
         case .failed:
             return fallback(.openFailed)
@@ -102,14 +126,19 @@ public final class LinkRouter {
         }
     }
 
-    /// Checks `condition` every 100ms until it holds or `timeout` passes.
-    private func poll(for timeout: Duration, _ condition: () -> Bool) async -> Bool {
+    /// Checks `condition` every `interval` until it holds or `timeout` passes.
+    private func poll(for timeout: Duration, every interval: Duration = .milliseconds(100), _ condition: () -> Bool) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now + timeout
         while true {
             if condition() { return true }
             if clock.now >= deadline { return false }
-            try? await Task.sleep(for: min(.milliseconds(100), deadline - clock.now))
+            try? await Task.sleep(for: min(interval, deadline - clock.now))
         }
     }
+}
+
+@MainActor
+private final class AckBox {
+    var result: OpenResult?
 }
