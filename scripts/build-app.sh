@@ -36,6 +36,8 @@ if [[ "${1:-}" == "--install" ]]; then
   rm -rf "$DEST"
   cp -R "$APP" "$DEST"
   "$LSREGISTER" -f "$DEST"
-  open "$DEST"
+  # LaunchServices sometimes refuses (-600) right after the old copy quit; wait and retry once.
+  sleep 1
+  open "$DEST" || { sleep 2; open "$DEST"; }
   echo "installed and launched $DEST"
 fi
