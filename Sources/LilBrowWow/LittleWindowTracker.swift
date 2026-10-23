@@ -97,6 +97,15 @@ final class LittleWindowTracker {
         recompute()
     }
 
+    /// Presses the window's close button, exactly as clicking it would. False if the window isn't tracked or has none.
+    func close(windowId: Int) -> Bool {
+        guard let element = entries[windowId]?.element else { return false }
+        var button: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXCloseButtonAttribute as CFString, &button) == .success,
+              let button, CFGetTypeID(button) == AXUIElementGetTypeID() else { return false }
+        return AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success
+    }
+
     // MARK: Accessibility plumbing
 
     private func startObserving(_ pid: pid_t) {

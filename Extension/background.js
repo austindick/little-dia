@@ -94,12 +94,12 @@ async function moveToMainWindow(windowId) {
   const mainId = pickMainWindowId(normals, lastNormalWindowId);
   if (mainId != null) {
     await chrome.tabs.create({ windowId: mainId, url, active: true });
-    await chrome.windows.update(mainId, { focused: true });
   } else {
     await chrome.windows.create({ type: "normal", url, focused: true });
   }
+  // The app closes the little window (natively) and brings the browser forward: Dia ignores windows.remove and
+  // windows.update({focused}) for popups.
   post({ type: "littleMoved", windowId });
-  await chrome.windows.remove(windowId);
 }
 
 async function handleAppMessage(msg) {

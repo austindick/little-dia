@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var focusReturn: FocusReturn<NSRunningApplication>!
     private var tracker: LittleWindowTracker!
     private var overlay: TitleBarOverlay!
+    private var moveToMain: MoveToMain!
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -68,6 +69,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.overlay.hide()
             }
         }
+        moveToMain = MoveToMain(
+            closeNatively: { [weak self] id in self?.tracker.close(windowId: id) ?? false },
+            closeViaExtension: { [weak self] id in
+                guard let self else { return }
+                self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
+            },
+            activateBrowser: { [weak self] in
+                guard let self else { return }
+                self.browserControl.activate(bundleID: self.settings.browser.bundleID)
+            })
         installNativeHostManifests(applicationSupport: applicationSupport)
         statusMenu = StatusMenu(settings: settings, link: link)
     }
@@ -104,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { await focusReturn.handle(message) }
         case .littleMoved:
             Task { await focusReturn.handle(message) }
+            Task { await moveToMain.handle(message) }
         case let .copy(url):
             writeToPasteboard(url)
         default:
@@ -127,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func moveToMainWindow(_ windowId: Int) {
         let bundleID = registry.info(for: windowId)?.browserBundleID ?? settings.browser.bundleID
         server.send(.move(windowId: windowId), to: bundleID)
-        tracker.untrack(windowId: windowId)
+        overlay.hide()
     }
 
     private static func describe(_ message: InboundMessage) -> String {
