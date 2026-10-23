@@ -84,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings.rememberSize(bounds)
         case .littleClosed, .littleMoved:
             Task { await focusReturn.handle(message) }
+        case let .copy(url):
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
         default:
             break
         }

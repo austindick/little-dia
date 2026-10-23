@@ -17,5 +17,33 @@
   "background": {
     "service_worker": "background.js",
     "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "click-rules.js",
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "commands": {
+    "copy-url": {
+      "suggested_key": {
+        "default": "Alt+Shift+C",
+        "mac": "Alt+Shift+C"
+      },
+      "description": "Copy page URL"
+    },
+    "move-to-main": {
+      "suggested_key": {
+        "default": "Alt+Shift+O",
+        "mac": "Alt+Command+O"
+      },
+      "description": "Move little window to main window"
+    }
   }
 }

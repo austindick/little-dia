@@ -1,6 +1,6 @@
 // Lil Brow Wow service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.lilbrowwow.bridge`.
-import { popupCreateOptions, pickMainWindowId, windowBounds, chromeHeight, reportedBounds } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds } from "./bridge-logic.js";
 
 const HOST = "com.lilbrowwow.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used when Dia doesn't report window sizes.
@@ -46,7 +46,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 connect();
 
 // ---- State (survives service-worker restarts) -------------------------------------------------------------------
-// littleWindows: { [windowId]: { tabId, chrome } } where chrome is the height the browser added above the page area.
+// littleWindows: { [windowId]: { tabId, chrome, bounds } } where chrome is the height the browser added above the page
+// area and bounds is the window's last known page area.
 
 async function getState() {
   const s = await chrome.storage.session.get(["littleWindows", "lastNormalWindowId"]);
@@ -65,11 +66,22 @@ async function openLittleWindow({ url, bounds, focused = true, requestId }) {
   const win = await chrome.windows.create(popupCreateOptions({ url, bounds, focused }));
   // Dia reports 0x0 here; fall back to the request and assume Dia's usual title-bar height until a real size arrives.
   const addedHeight = win.height > 0 ? chromeHeight(bounds.height, win.height) : DIA_CHROME_HEIGHT;
-  await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: addedHeight }; });
-  const opened = { type: "opened", windowId: win.id, url, bounds: reportedBounds(bounds, win) };
+  const pageBounds = reportedBounds(bounds, win);
+  await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: addedHeight, bounds: pageBounds }; });
+  const opened = { type: "opened", windowId: win.id, url, bounds: pageBounds };
   if (requestId) opened.requestId = requestId;
   post(opened);
   return win;
+}
+
+/** Opens `url` in a new little window offset from the little window it came from. */
+async function openFromLittleWindow(sourceWindowId, url) {
+  const { littleWindows } = await getState();
+  const source = littleWindows[sourceWindowId];
+  if (!source) return;
+  const current = await chrome.windows.get(sourceWindowId).catch(() => null);
+  const from = current && current.width > 0 ? windowBounds(current, source.chrome) : source.bounds;
+  await openLittleWindow({ url, bounds: cascadeBounds(from), focused: true });
 }
 
 async function moveToMainWindow(windowId) {
@@ -122,7 +134,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 chrome.windows.onBoundsChanged.addListener(async (win) => {
   const { littleWindows } = await getState();
   const info = littleWindows[win.id];
-  if (info) post({ type: "littleBounds", windowId: win.id, bounds: windowBounds(win, info.chrome) });
+  if (!info) return;
+  const bounds = windowBounds(win, info.chrome);
+  await updateLittleWindows((w) => { if (w[win.id]) w[win.id].bounds = bounds; });
+  post({ type: "littleBounds", windowId: win.id, bounds });
 });
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
@@ -139,5 +154,47 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
     if (win.type === "normal") await chrome.storage.session.set({ lastNormalWindowId: windowId });
   } catch {
     // The window closed before we looked at it.
+  }
+});
+
+// ---- Links inside little windows ----------------------------------------------------------------------------
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const windowId = sender.tab?.windowId;
+  if (msg.type === "isLittle") {
+    getState().then(({ littleWindows }) => sendResponse(windowId != null && Boolean(littleWindows[windowId])));
+    return true;   // responds asynchronously
+  }
+  if (msg.type === "openLittle" && windowId != null) {
+    openFromLittleWindow(windowId, msg.url).catch((e) => console.error("Lil Brow Wow: openLittle", e));
+  }
+  return false;
+});
+
+// Backstop for new tabs the content script couldn't catch (e.g. window.open from page scripts): a new *tab* opened
+// from a little window lands in the main window, so move it into a little window. Real popups stay as they are.
+chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
+  const { littleWindows } = await getState();
+  const sourceTab = await chrome.tabs.get(details.sourceTabId).catch(() => null);
+  if (!sourceTab || !littleWindows[sourceTab.windowId]) return;
+  const newTab = await chrome.tabs.get(details.tabId).catch(() => null);
+  if (!newTab) return;
+  const newWindow = await chrome.windows.get(newTab.windowId).catch(() => null);
+  if (!newWindow || newWindow.type !== "normal") return;
+  await chrome.tabs.remove(details.tabId);
+  await openFromLittleWindow(sourceTab.windowId, details.url);
+});
+
+// ---- Keyboard shortcuts -----------------------------------------------------------------------------------------
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "copy-url") {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const url = tab?.url || tab?.pendingUrl;
+    if (url) post({ type: "copy", url });   // the app writes the clipboard
+  } else if (command === "move-to-main") {
+    const win = await chrome.windows.getLastFocused();
+    const { littleWindows } = await getState();
+    if (littleWindows[win.id]) await moveToMainWindow(win.id);
   }
 });
