@@ -25,6 +25,17 @@ final class BrowserControlImpl: BrowserControl {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.activate()
     }
 
+    /// Takes you to the browser's main window, switching desktops if needed. Opening the app through LaunchServices
+    /// does this even when the browser is already active (spike method M2), unlike `activate`.
+    func showMainWindow(bundleID: String) {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { [logger] _, error in
+            if let error { logger.error("showing main window failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     func onScreenWindows(bundleID: String) -> [WindowCandidate<Int>] {
         windows(of: bundleID, options: [.optionOnScreenOnly, .excludeDesktopElements]).map { WindowCandidate(id: $0.number, frame: $0.frame) }
     }

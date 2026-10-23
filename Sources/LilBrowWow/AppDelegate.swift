@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             activateBrowser: { [weak self] in
                 guard let self else { return }
-                self.browserControl.activate(bundleID: self.settings.browser.bundleID)
+                self.browserControl.showMainWindow(bundleID: self.settings.browser.bundleID)
             })
         installNativeHostManifests(applicationSupport: applicationSupport)
         statusMenu = StatusMenu(settings: settings, link: link)

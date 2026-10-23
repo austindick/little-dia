@@ -54,8 +54,18 @@ final class TitleBarOverlay {
         let size = panel.contentView?.fittingSize ?? panel.frame.size
         let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
                                                   titleBarHeight: Self.titleBarHeight, rightInset: Self.rightInset)
+        let wasHidden = !panel.isVisible
         panel.setFrame(ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight), display: true)
-        panel.orderFrontRegardless()
+        if wasHidden {
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                panel.animator().alphaValue = 1
+            }
+        } else {
+            panel.orderFrontRegardless()
+        }
     }
 
     func hide() {

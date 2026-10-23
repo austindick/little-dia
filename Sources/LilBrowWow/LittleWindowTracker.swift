@@ -29,6 +29,8 @@ final class LittleWindowTracker {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var followTimer: Timer?
     private var mouseWasDown = false
+    /// The shown window is being dragged or resized: its buttons are hidden until the mouse is released.
+    private var dragging = false
 
     init(onChange: @escaping (TrackedWindow?) -> Void) {
         self.onChange = onChange
@@ -143,6 +145,7 @@ final class LittleWindowTracker {
     }
 
     private func recompute() {
+        if dragging { return }   // stay hidden until the drag ends
         var visible: TrackedWindow?
         if let pid = browserPID {
             let focusedID = focusedWindow(of: pid).flatMap { focused in entries.first { CFEqual($0.value.element, focused) }?.key }
@@ -167,9 +170,10 @@ final class LittleWindowTracker {
         onChange(visible)
     }
 
-    // MARK: Following drags
-    // Accessibility "moved" notifications arrive late during a drag, but the window server knows where the window is
-    // at every frame. While the buttons are showing and the mouse is held down, follow the window from there.
+    // MARK: Hiding during drags
+    // Buttons drawn by another app can't move in lockstep with the window, so they hide while the window is being
+    // dragged or resized and come back where it ends up. The window server reports the window's frame live; check it
+    // every frame while the buttons are showing and the mouse is held down.
 
     private func startFollowing() {
         guard followTimer == nil else { return }
@@ -190,15 +194,17 @@ final class LittleWindowTracker {
         let mouseDown = NSEvent.pressedMouseButtons & 1 == 1
         defer { mouseWasDown = mouseDown }
         if !mouseDown {
-            if mouseWasDown { recompute() }   // drag ended: settle on the final position
+            if dragging {
+                dragging = false
+                lastReported = nil
+                recompute()   // reappear where the window ended up
+            }
             return
         }
-        guard let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
+        guard !dragging, let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
               let frame = serverInfo(of: number)?.frame, frame != shown.frameTopLeft else { return }
-        entries[shown.windowId]?.frame = frame
-        let moved = TrackedWindow(windowId: shown.windowId, frameTopLeft: frame)
-        lastReported = moved
-        onChange(moved)
+        dragging = true
+        onChange(nil)
     }
 
     private func serverInfo(of number: CGWindowID) -> (frame: CGRect, onScreen: Bool)? {
