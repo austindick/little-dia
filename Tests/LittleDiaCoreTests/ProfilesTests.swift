@@ -42,3 +42,10 @@ private func makeUserData(profiles: [String: String], extensionIn: String?) thro
 @Test func allProfilesAreListedAlphabeticallyIncludingTheCurrentOne() {
     #expect(BrowserProfiles(current: "Work", others: ["Personal", "Side"]).all == ["Personal", "Side", "Work"])
 }
+
+@Test func openTabScriptEscapesAndTargetsDia() {
+    let script = DiaScript.openTab(url: "chrome://extensions")
+    #expect(script.contains("company.thebrowser.dia"))
+    #expect(script.contains(#"{URL:"chrome://extensions"}"#))
+    #expect(DiaScript.openTab(url: #"https://a.b/"x""#).contains(#"{URL:"https://a.b/\"x\""}"#))
+}

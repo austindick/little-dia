@@ -18,6 +18,7 @@ public final class UserDefaultsSettings: LittleSettings {
         static let height = "littleWindowHeight"
         static let browser = "browserBundleID"
         static let chromeHeight = "chromeHeight"
+        static let hasLaunchedBefore = "hasLaunchedBefore"
     }
 
     private let defaults: UserDefaults
@@ -43,6 +44,12 @@ public final class UserDefaultsSettings: LittleSettings {
 
     public var browser: BrowserAdapter {
         BrowserAdapter.forBundleID(defaults.string(forKey: Key.browser) ?? "") ?? .dia
+    }
+
+    /// False until the first launch has set up what a first launch sets up (open at login).
+    public var hasLaunchedBefore: Bool {
+        get { defaults.bool(forKey: Key.hasLaunchedBefore) }
+        set { defaults.set(newValue, forKey: Key.hasLaunchedBefore) }
     }
 
     public var chromeHeight: CGFloat {

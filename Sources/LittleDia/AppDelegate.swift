@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The version the running extension last reported.
     private var lastExtensionVersion: String?
     private var reloadPolicy = ExtensionReloadPolicy()
+    private var setupWindow: SetupWindowController?
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -134,6 +135,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu = StatusMenu(settings: settings, link: link)
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if !settings.hasLaunchedBefore {
+            SystemIntegration.launchAtLogin = true
+            settings.hasLaunchedBefore = true
+        }
+        // Open the setup window if a step is unfinished. When Dia is running, give its extension time to connect
+        // first, so a set-up Mac doesn't flash the window on every launch: a few seconds normally, and up to a minute
+        // more (the extension's reconnect alarm) when Dia's files show the extension is installed.
+        Task {
+            let bundleID = settings.browser.bundleID
+            if browserControl.isRunning(bundleID: bundleID),
+               !(await link.waitUntilReady(browser: bundleID, timeout: .seconds(5))), loadProfiles() != nil {
+                _ = await link.waitUntilReady(browser: bundleID, timeout: .seconds(65))
+            }
+            let status = setupStatus()
+            logger.notice("setup status at launch: \(status.menuLine.text, privacy: .public)")
+            if !status.requiredDone { showSetup() }
+        }
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         // The app the link was clicked in; focus goes back there when the little window closes.
         let cameFrom = focusReturn.origin(frontmost: NSWorkspace.shared.frontmostApplication)
@@ -175,6 +196,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             break
         }
+    }
+
+    // MARK: Setup
+
+    /// What the setup window and the menu's status line report.
+    func setupStatus() -> SetupStatus {
+        let bundleID = settings.browser.bundleID
+        let profiles = loadProfiles()
+        let extensionState: ExtensionState
+        if link.isReady(browser: bundleID) {
+            extensionState = .connected
+        } else if !browserControl.isRunning(bundleID: bundleID), profiles != nil {
+            // Dia can't connect while it's closed; its profile files show the extension is there.
+            extensionState = .installed
+        } else {
+            extensionState = .missing
+        }
+        return SetupStatus(isDefaultBrowser: SystemIntegration.isDefaultBrowser(), extensionState: extensionState,
+                           accessibilityGranted: SystemIntegration.isAccessibilityTrusted(prompt: false),
+                           browserPinnedToDesktop: SystemIntegration.isBrowserAssignedToDesktop(bundleID),
+                           profile: profiles?.current)
+    }
+
+    func showSetup() {
+        if setupWindow == nil {
+            let model = SetupModel(extensionFolder: extensionFolder,
+                                   readStatus: { [weak self] in self?.setupStatus() ?? SetupStatus(isDefaultBrowser: false, extensionState: .missing, accessibilityGranted: false, browserPinnedToDesktop: false, profile: nil) },
+                                   openExtensionsPage: { [weak self] in
+                                       await self?.runAppleScript(DiaScript.openTab(url: "chrome://extensions")) ?? false
+                                   })
+            setupWindow = SetupWindowController(model: model)
+        }
+        logger.notice("showing the setup window")
+        setupWindow?.present()
     }
 
     // MARK: The extension
@@ -231,12 +286,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Profile names for the Move button, read from the browser's files (they can change while the app runs).
     private func reloadProfiles() {
-        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let profiles = settings.browser.userDataDirectory.flatMap {
-            BrowserProfiles.load(userDataDirectory: applicationSupport.appendingPathComponent($0))
-        }
+        let profiles = loadProfiles()
         logger.notice("profiles: current=\(profiles?.current ?? "unknown", privacy: .public) others=\(profiles?.others.joined(separator: ", ") ?? "", privacy: .public)")
         overlay.setProfiles(profiles)
+    }
+
+    /// The browser's profiles and which one has the extension, read from its files (nil if the extension isn't in any).
+    private func loadProfiles() -> BrowserProfiles? {
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return settings.browser.userDataDirectory.flatMap {
+            BrowserProfiles.load(userDataDirectory: applicationSupport.appendingPathComponent($0))
+        }
     }
 
     /// Runs an AppleScript with `osascript`, so the main thread stays free (the first run may wait on the

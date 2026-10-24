@@ -46,6 +46,16 @@ public enum DiaScript {
         """
     }
 
+    /// Opens `url` in a new tab of Dia's front window and brings Dia forward (Dia shows chrome:// pages as dia://).
+    public static func openTab(url: String) -> String {
+        """
+        tell application id "company.thebrowser.dia"
+            make new tab at end of tabs of window 1 with properties {URL:\(literal(url))}
+            activate
+        end tell
+        """
+    }
+
     static func literal(_ text: String) -> String {
         "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
