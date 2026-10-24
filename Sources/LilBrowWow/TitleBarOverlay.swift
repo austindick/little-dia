@@ -5,11 +5,10 @@ import LilBrowCore
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
 @MainActor
 final class TitleBarOverlay {
-    /// Dia's popup title bar (measured); the address row sits below it.
-    static let titleBarHeight: CGFloat = 28
-    static let rightInset: CGFloat = 8
-    /// Sits the buttons a little lower than dead center, to line up with Dia's title text.
-    static let verticalNudge: CGFloat = 2
+    /// Gap above and to the right of the buttons, inside the window's top-right corner.
+    static let inset: CGFloat = 5
+    /// Dia's popup window corner radius (estimated); the Move button's top-right corner nests inside it.
+    static let windowCornerRadius: CGFloat = 16
 
     private let panel: NSPanel
     private let copyButton: PillButton
@@ -36,7 +35,8 @@ final class TitleBarOverlay {
         panel.animationBehavior = .none
 
         copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
-        moveButton = PillButton(title: browserName, symbol: "arrow.up.forward.app", label: "Open in \(browserName)")
+        moveButton = PillButton(title: browserName, symbol: "arrow.up.forward.app", label: "Open in \(browserName)",
+                                topRightRadius: Self.windowCornerRadius - Self.inset)
         copyButton.toolTip = "Copy this page's URL"
         moveButton.toolTip = "Move this page to the main \(browserName) window"
 
@@ -55,9 +55,7 @@ final class TitleBarOverlay {
     func show(_ window: TrackedWindow, primaryScreenHeight: CGFloat) {
         current = window
         let size = panel.contentView?.fittingSize ?? panel.frame.size
-        let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
-                                                  titleBarHeight: Self.titleBarHeight, rightInset: Self.rightInset)
-            .offsetBy(dx: 0, dy: Self.verticalNudge)
+        let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size, inset: Self.inset)
         let wasHidden = !panel.isVisible
         panel.setFrame(ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight), display: true)
         if wasHidden {
@@ -101,13 +99,15 @@ final class TitleBarOverlay {
 /// A small borderless button, optionally with a soft, semi-transparent rounded fill that darkens on hover and press.
 /// The fill is drawn here rather than set on the button's layer, which AppKit manages itself.
 private final class PillButton: NSButton {
-    static let height: CGFloat = 22
+    static let height: CGFloat = 23
     static let cornerRadius: CGFloat = 6
     private let filled: Bool
+    private let topRightRadius: CGFloat
     private var hovering = false { didSet { needsDisplay = true } }
 
-    init(title: String?, symbol: String, label: String, filled: Bool = true) {
+    init(title: String?, symbol: String, label: String, filled: Bool = true, topRightRadius: CGFloat? = nil) {
         self.filled = filled
+        self.topRightRadius = topRightRadius ?? Self.cornerRadius
         super.init(frame: .zero)
         self.title = title ?? ""
         isBordered = false
@@ -129,7 +129,7 @@ private final class PillButton: NSButton {
 
     override var intrinsicContentSize: NSSize {
         let content = super.intrinsicContentSize
-        let width = title.isEmpty ? Self.height + 4 : content.width + 16
+        let width = title.isEmpty ? Self.height : content.width + 16   // icon-only buttons are square
         return NSSize(width: max(width, Self.height), height: Self.height)
     }
 
@@ -141,9 +141,33 @@ private final class PillButton: NSButton {
         if filled {
             let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
             NSColor.labelColor.withAlphaComponent(alpha).setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
+            fillPath().fill()
         }
         super.draw(dirtyRect)
+    }
+
+    /// A rounded rectangle whose top-right corner can be rounder than the rest.
+    private func fillPath() -> NSBezierPath {
+        let r = bounds, small = Self.cornerRadius, big = min(topRightRadius, r.height / 2)
+        // In a flipped view the top edge is at minY.
+        let top = isFlipped ? r.minY : r.maxY, bottom = isFlipped ? r.maxY : r.minY
+        let down: CGFloat = isFlipped ? 1 : -1   // direction from the top edge toward the bottom
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: r.minX + small, y: top))
+        path.line(to: NSPoint(x: r.maxX - big, y: top))
+        path.curve(to: NSPoint(x: r.maxX, y: top + down * big),
+                   controlPoint1: NSPoint(x: r.maxX - big * 0.45, y: top), controlPoint2: NSPoint(x: r.maxX, y: top + down * big * 0.55))
+        path.line(to: NSPoint(x: r.maxX, y: bottom - down * small))
+        path.curve(to: NSPoint(x: r.maxX - small, y: bottom),
+                   controlPoint1: NSPoint(x: r.maxX, y: bottom - down * small * 0.45), controlPoint2: NSPoint(x: r.maxX - small * 0.55, y: bottom))
+        path.line(to: NSPoint(x: r.minX + small, y: bottom))
+        path.curve(to: NSPoint(x: r.minX, y: bottom - down * small),
+                   controlPoint1: NSPoint(x: r.minX + small * 0.45, y: bottom), controlPoint2: NSPoint(x: r.minX, y: bottom - down * small * 0.55))
+        path.line(to: NSPoint(x: r.minX, y: top + down * small))
+        path.curve(to: NSPoint(x: r.minX + small, y: top),
+                   controlPoint1: NSPoint(x: r.minX, y: top + down * small * 0.45), controlPoint2: NSPoint(x: r.minX + small * 0.55, y: top))
+        path.close()
+        return path
     }
 
     override func updateTrackingAreas() {
