@@ -129,7 +129,8 @@ private final class PillButton: NSButton {
 
     override var intrinsicContentSize: NSSize {
         let content = super.intrinsicContentSize
-        let width = title.isEmpty ? Self.height : content.width + 16   // icon-only buttons are square
+        // Icon-only buttons have no fill, so a little extra width is invisible and makes a bigger click target.
+        let width = title.isEmpty ? Self.height + 4 : content.width + 16
         return NSSize(width: max(width, Self.height), height: Self.height)
     }
 
