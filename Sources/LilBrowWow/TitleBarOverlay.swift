@@ -96,9 +96,12 @@ final class TitleBarOverlay {
 }
 
 /// A small borderless button with a soft, semi-transparent rounded fill that darkens on hover and press.
+/// The fill is drawn here rather than set on the button's layer: AppKit manages the layer of image-only buttons
+/// itself and drops its corner radius.
 private final class PillButton: NSButton {
     static let height: CGFloat = 22
-    private var hovering = false { didSet { updateFill() } }
+    static let cornerRadius: CGFloat = 6
+    private var hovering = false { didSet { needsDisplay = true } }
 
     init(title: String?, symbol: String, label: String) {
         super.init(frame: .zero)
@@ -110,9 +113,7 @@ private final class PillButton: NSButton {
         font = .systemFont(ofSize: 12, weight: .medium)
         contentTintColor = .labelColor
         setAccessibilityLabel(label)
-        wantsLayer = true
         setSymbol(symbol)
-        updateFill()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -129,7 +130,14 @@ private final class PillButton: NSButton {
     }
 
     override var isHighlighted: Bool {
-        didSet { updateFill() }
+        didSet { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
+        NSColor.labelColor.withAlphaComponent(alpha).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
+        super.draw(dirtyRect)
     }
 
     override func updateTrackingAreas() {
@@ -143,23 +151,6 @@ private final class PillButton: NSButton {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        updateFill()
-    }
-
-    private func updateFill() {
-        let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
-        var color: CGColor?
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            color = NSColor.labelColor.withAlphaComponent(alpha).cgColor
-        }
-        // Set here rather than once: AppKit can swap the button's layer.
-        layer?.cornerRadius = 6
-        layer?.cornerCurve = .continuous
-        layer?.backgroundColor = color
-    }
-
-    override func layout() {
-        super.layout()
-        updateFill()
+        needsDisplay = true
     }
 }
