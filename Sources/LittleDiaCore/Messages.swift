@@ -22,6 +22,10 @@ public enum OutboundMessage: Equatable, Sendable {
     case move(windowId: Int)
     /// Closes a little window the app gave up on (it never reached the screen).
     case close(windowId: Int)
+    /// Asks the extension to say `hello` (its first one can arrive before the helper reaches the app and be lost).
+    case ping
+    /// Asks the extension to reload itself from disk, after the app installed a newer copy.
+    case reload
 }
 
 /// Messages the app receives on the bridge socket: the helper's `hostHello`, then everything the extension sends.
@@ -81,6 +85,10 @@ extension OutboundMessage: Codable {
             self = .move(windowId: try c.decode(Int.self, forKey: .windowId))
         case "close":
             self = .close(windowId: try c.decode(Int.self, forKey: .windowId))
+        case "ping":
+            self = .ping
+        case "reload":
+            self = .reload
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Unknown outbound type \(other)")
         }
@@ -102,6 +110,10 @@ extension OutboundMessage: Codable {
         case let .close(windowId):
             try c.encode("close", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
+        case .ping:
+            try c.encode("ping", forKey: .type)
+        case .reload:
+            try c.encode("reload", forKey: .type)
         }
     }
 }

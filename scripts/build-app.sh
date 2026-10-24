@@ -21,6 +21,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers"
 cp "$BIN/LittleDia" "$APP/Contents/MacOS/LittleDia"
 cp "$BIN/littledia-host" "$APP/Contents/Helpers/littledia-host"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# The extension ships inside the app (sealed by its signature); the app copies it to where Dia loads it from.
+mkdir -p "$APP/Contents/Resources"
+ditto Extension "$APP/Contents/Resources/Extension"
+rm -rf "$APP/Contents/Resources/Extension/test"
 
 if [[ "$IDENTITY" == "-" ]]; then
   echo "warning: ad-hoc signing; Accessibility access must be re-granted after every build (set LITTLEDIA_SIGN_IDENTITY)" >&2

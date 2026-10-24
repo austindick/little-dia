@@ -143,6 +143,13 @@ async function handleAppMessage(msg) {
       // The app gave up on this window (it never reached the screen) and opened the link normally instead.
       await chrome.windows.remove(msg.windowId).catch(() => {});
       break;
+    case "ping":
+      post({ type: "hello", extensionVersion: chrome.runtime.getManifest().version });
+      break;
+    case "reload":
+      // The app installed a newer copy of this extension in the folder Dia loads it from.
+      chrome.runtime.reload();
+      break;
     default:
       console.warn("Little Dia: unknown message from app", msg);
   }

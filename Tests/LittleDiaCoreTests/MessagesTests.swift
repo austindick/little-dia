@@ -54,3 +54,8 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
 @Test func rejectsCopyMessage() {   // the extension never sends it; Copy reads the URL the app already tracks
     #expect(throws: (any Error).self) { try MessageCoding.decodeInbound(Data(#"{"type":"copy","url":"https://a.b/"}"#.utf8)) }
 }
+
+@Test func encodesPingAndReloadExactly() throws {
+    #expect(String(decoding: try MessageCoding.encode(OutboundMessage.ping), as: UTF8.self) == #"{"type":"ping"}"#)
+    #expect(String(decoding: try MessageCoding.encode(OutboundMessage.reload), as: UTF8.self) == #"{"type":"reload"}"#)
+}

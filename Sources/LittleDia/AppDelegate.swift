@@ -17,6 +17,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: TitleBarOverlay!
     private var moveToMain: MoveToMain!
     private var sendToProfile: SendToProfile!
+    /// Where Dia loads the extension from (a copy of the one bundled in the app).
+    private var extensionFolder: URL!
+    private var bundledExtensionVersion: String?
+    /// The version the running extension last reported.
+    private var lastExtensionVersion: String?
+    private var reloadPolicy = ExtensionReloadPolicy()
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -29,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? FileManager.default.createDirectory(at: ownFolder, withIntermediateDirectories: true,
                                                  attributes: [.posixPermissions: 0o700])
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: ownFolder.path)
+        extensionFolder = ownFolder.appendingPathComponent("Extension", isDirectory: true)
+        installBundledExtension()
 
         server = BridgeServer(socketPath: ownFolder.appendingPathComponent("bridge.sock").path,
                               acceptPeer: PeerVerifier.make(helperPath: Self.helperPath,
@@ -38,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         link.onConnectionsChanged = { [weak self] in
             self?.statusMenu?.refresh()
             self?.reloadProfiles()
+            self?.pingExtension()
         }
         do {
             try server.start()
@@ -158,10 +167,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .littleMoved:
             Task { await focusReturn.handle(message) }
             moveToMain.handle(message)
+        case let .hello(version):
+            lastExtensionVersion = version
+            checkExtensionVersion(version, browser: bundleID)
         case let .log(text):
             logger.notice("extension: \(text, privacy: .public)")
         default:
             break
+        }
+    }
+
+    // MARK: The extension
+
+    /// Copies the extension bundled in the app to the folder Dia loads it from, when that copy is missing or older.
+    private func installBundledExtension() {
+        guard let bundled = Bundle.main.resourceURL?.appendingPathComponent("Extension", isDirectory: true) else { return }
+        bundledExtensionVersion = ExtensionInstaller.version(ofExtensionAt: bundled)
+        do {
+            if try ExtensionInstaller.installIfNeeded(bundled: bundled, installed: extensionFolder) {
+                logger.notice("installed extension \(self.bundledExtensionVersion ?? "?", privacy: .public) at \(self.extensionFolder.path, privacy: .public)")
+            }
+        } catch {
+            logger.error("installing the extension failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// The extension's first hello can be lost before the helper reaches the app, so ask again once connected.
+    private func pingExtension() {
+        let bundleID = settings.browser.bundleID
+        guard link.isReady(browser: bundleID) else { return }
+        server.send(.ping, to: bundleID)
+    }
+
+    /// After an update, the extension Dia is running is older than the copy just installed: have it reload from disk.
+    private func checkExtensionVersion(_ version: String, browser bundleID: String) {
+        guard let bundled = bundledExtensionVersion, version != bundled else { return }
+        if reloadPolicy.shouldReload(connectedVersion: version, bundledVersion: bundled) {
+            logger.notice("extension \(version, privacy: .public) differs from the bundled \(bundled, privacy: .public); asking it to reload")
+            server.send(.reload, to: bundleID)
+        } else {
+            logger.notice("extension \(version, privacy: .public) still differs from the bundled \(bundled, privacy: .public); Dia may be loading it from a folder other than \(self.extensionFolder.path, privacy: .public)")
         }
     }
 
