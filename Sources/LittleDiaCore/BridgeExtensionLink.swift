@@ -5,12 +5,14 @@ public struct OpenRequest: Equatable, Sendable {
     public var url: URL
     public var bounds: Bounds
     public var focused: Bool
+    public var chromeHeight: Int
 
-    public init(requestId: String, url: URL, bounds: Bounds, focused: Bool) {
+    public init(requestId: String, url: URL, bounds: Bounds, focused: Bool, chromeHeight: Int) {
         self.requestId = requestId
         self.url = url
         self.bounds = bounds
         self.focused = focused
+        self.chromeHeight = chromeHeight
     }
 }
 
@@ -63,7 +65,8 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
     }
 
     public func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult {
-        let message = OutboundMessage.open(requestId: request.requestId, url: request.url, bounds: request.bounds, focused: request.focused)
+        let message = OutboundMessage.open(requestId: request.requestId, url: request.url, bounds: request.bounds,
+                                           focused: request.focused, chromeHeight: request.chromeHeight)
         guard let connection = server.send(message, to: browser) else { return .failed("extension not connected") }
         return await withCheckedContinuation { continuation in
             pendingOpens[request.requestId] = (continuation, connection)

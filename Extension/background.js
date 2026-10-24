@@ -1,9 +1,9 @@
 // Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds, makeSerial, nextReconnectDelay } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight } from "./bridge-logic.js";
 
 const HOST = "com.austindick.littledia.bridge";
-// Height Dia adds above a popup's page area (measured 2026-10-23); used when Dia doesn't report window sizes.
+// Height Dia adds above a popup's page area (measured 2026-10-23); used only if the app didn't send its measurement.
 const DIA_CHROME_HEIGHT = 72;
 let port = null;
 let connectedAt = 0;
@@ -73,12 +73,12 @@ function updateLittleWindows(change) {
 
 // ---- Little windows ---------------------------------------------------------------------------------------------
 
-async function openLittleWindow({ url, bounds, focused = true, requestId }) {
+async function openLittleWindow({ url, bounds, focused = true, requestId, chromeHeight: measured }) {
   const win = await chrome.windows.create(popupCreateOptions({ url, bounds, focused }));
-  // Dia reports 0x0 here; fall back to the request and assume Dia's usual title-bar height until a real size arrives.
-  const addedHeight = win.height > 0 ? chromeHeight(bounds.height, win.height) : DIA_CHROME_HEIGHT;
+  // Dia reports 0x0 here; fall back to the request and the title-bar height the app measured.
+  const added = addedHeight(win, bounds.height, measured ?? DIA_CHROME_HEIGHT);
   const pageBounds = reportedBounds(bounds, win);
-  await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: addedHeight, bounds: pageBounds }; });
+  await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: added, bounds: pageBounds }; });
   const opened = { type: "opened", windowId: win.id, url, bounds: pageBounds };
   if (requestId) opened.requestId = requestId;
   post(opened);
@@ -92,7 +92,7 @@ async function openFromLittleWindow(sourceWindowId, url) {
   if (!source) return;
   const current = await chrome.windows.get(sourceWindowId).catch(() => null);
   const from = current && current.width > 0 ? windowBounds(current, source.chrome) : source.bounds;
-  await openLittleWindow({ url, bounds: cascadeBounds(from), focused: true });
+  await openLittleWindow({ url, bounds: cascadeBounds(from), focused: true, chromeHeight: source.chrome });
 }
 
 async function moveToMainWindow(windowId) {
@@ -131,7 +131,7 @@ async function handleAppMessage(msg) {
   switch (msg.type) {
     case "open":
       try {
-        await openLittleWindow({ url: msg.url, bounds: msg.bounds, focused: msg.focused, requestId: msg.requestId });
+        await openLittleWindow({ url: msg.url, bounds: msg.bounds, focused: msg.focused, requestId: msg.requestId, chromeHeight: msg.chromeHeight });
       } catch (e) {
         post({ type: "openFailed", requestId: msg.requestId, error: String(e) });
       }

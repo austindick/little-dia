@@ -28,6 +28,7 @@ final class LittleWindowTracker {
 
     private let onChange: (TrackedWindow?) -> Void
     private let onResize: (Int, Bounds) -> Void
+    private let onSettled: (Int, CGFloat) -> Void
     private let logger = Logger(subsystem: "com.austindick.littledia", category: "tracker")
     private var entries: [Int: Entry] = [:]
     private var browserPID: pid_t?
@@ -42,9 +43,13 @@ final class LittleWindowTracker {
     private var dragStart: TrackedWindow?
 
     /// - Parameter onResize: called with the new page-area bounds when the user finishes resizing a little window.
-    init(onChange: @escaping (TrackedWindow?) -> Void, onResize: @escaping (Int, Bounds) -> Void) {
+    /// - Parameter onSettled: called once a new little window has finished opening, with the height the browser
+    ///   added above the page area it was asked for (its title bar and address row).
+    init(onChange: @escaping (TrackedWindow?) -> Void, onResize: @escaping (Int, Bounds) -> Void,
+         onSettled: @escaping (Int, CGFloat) -> Void) {
         self.onChange = onChange
         self.onResize = onResize
+        self.onSettled = onSettled
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
             workspaceObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -91,7 +96,9 @@ final class LittleWindowTracker {
                 // The window is still animating open and the browser is still taking focus: show the buttons once
                 // its frame has stopped changing (two identical readings in a row), then check again a moment later.
                 Task { @MainActor [weak self] in
-                    await self?.waitUntilSettled(windowId)
+                    if let settledFrame = await self?.waitUntilSettled(windowId), let pageHeight = self?.entries[windowId]?.pageHeight {
+                        self?.onSettled(windowId, settledFrame.height - pageHeight)
+                    }
                     self?.entries[windowId]?.settled = true
                     self?.recompute()
                     try? await Task.sleep(for: .milliseconds(400))
@@ -105,18 +112,20 @@ final class LittleWindowTracker {
         return false
     }
 
-    private func waitUntilSettled(_ windowId: Int) async {
+    /// Returns the settled frame, or nil if the window never settled (or went away) within ~1.2s.
+    private func waitUntilSettled(_ windowId: Int) async -> CGRect? {
         var last: CGRect?
         for _ in 0..<40 {   // at most ~1.2s
-            guard let entry = entries[windowId] else { return }
+            guard let entry = entries[windowId] else { return nil }
             let number = entry.windowNumber ?? browserPID.flatMap { onThisDesktop(entry.frame, pid: $0) }
             if let number { entries[windowId]?.windowNumber = number }
             let frame = number.flatMap { serverInfo(of: $0)?.frame }
             // Settled: back at the requested width (not mid-overshoot) and unchanged since the last reading.
-            if let frame, frame == last, abs(frame.width - entry.expectedWidth) < 0.5 { return }
+            if let frame, frame == last, abs(frame.width - entry.expectedWidth) < 0.5 { return frame }
             last = frame
             try? await Task.sleep(for: .milliseconds(30))
         }
+        return nil
     }
 
     func untrack(windowId: Int) {

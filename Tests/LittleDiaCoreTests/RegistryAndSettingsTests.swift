@@ -28,3 +28,17 @@ import Testing
     settings.isEnabled = false
     #expect(!UserDefaultsSettings(defaults: defaults).isEnabled)
 }
+
+@MainActor @Test func settingsRemembersAPlausibleChromeHeight() {
+    let suite = "ld-test-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = UserDefaultsSettings(defaults: defaults)
+    #expect(settings.chromeHeight == 72)
+    settings.rememberChromeHeight(80)
+    #expect(settings.chromeHeight == 80)
+    settings.rememberChromeHeight(500)   // a mismeasurement (e.g. the window was mid-animation) is ignored
+    #expect(settings.chromeHeight == 80)
+    settings.rememberChromeHeight(5)
+    #expect(settings.chromeHeight == 80)
+}

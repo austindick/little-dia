@@ -105,9 +105,9 @@ private final class TestClient: @unchecked Sendable {
     let client = try TestClient(path: path)
     try client.ready()
     #expect(await until { link.isReady(browser: browser) })
-    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true), browser: browser, timeout: .seconds(2))
+    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72), browser: browser, timeout: .seconds(2))
     let received = try await client.readOutbound()
-    #expect(received == .open(requestId: "r1", url: github, bounds: someBounds, focused: true))
+    #expect(received == .open(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72))
     try client.send(.opened(requestId: "r1", windowId: 42, url: github.absoluteString, bounds: someBounds))
     #expect(await result == .opened(windowId: 42))
 }
@@ -118,7 +118,7 @@ private final class TestClient: @unchecked Sendable {
     let client = try TestClient(path: path)
     try client.ready()
     #expect(await until { link.isReady(browser: browser) })
-    let result = await link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true), browser: browser, timeout: .milliseconds(200))
+    let result = await link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72), browser: browser, timeout: .milliseconds(200))
     #expect(result == .timedOut)
 }
 
@@ -128,7 +128,7 @@ private final class TestClient: @unchecked Sendable {
     let client = try TestClient(path: path)
     try client.ready()
     #expect(await until { link.isReady(browser: browser) })
-    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true), browser: browser, timeout: .seconds(2))
+    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72), browser: browser, timeout: .seconds(2))
     _ = try await client.readOutbound()
     try client.send(.openFailed(requestId: "r1", error: "boom"))
     #expect(await result == .failed("boom"))
@@ -192,7 +192,7 @@ private final class TestClient: @unchecked Sendable {
     #expect(await until { link.isReady(browser: browser) })
     let clock = ContinuousClock()
     let started = clock.now
-    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true), browser: browser, timeout: .seconds(5))
+    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72), browser: browser, timeout: .seconds(5))
     _ = try await client.readOutbound()
     client.close()
     #expect(await result == .failed("connection lost"))

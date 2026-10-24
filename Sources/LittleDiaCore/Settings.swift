@@ -6,6 +6,8 @@ public protocol LittleSettings: AnyObject {
     var isEnabled: Bool { get }
     var littleWindowSize: CGSize { get }
     var browser: BrowserAdapter { get }
+    /// Height the browser adds above a little window's page area, as last measured (the adapter's value until then).
+    var chromeHeight: CGFloat { get }
 }
 
 @MainActor
@@ -15,6 +17,7 @@ public final class UserDefaultsSettings: LittleSettings {
         static let width = "littleWindowWidth"
         static let height = "littleWindowHeight"
         static let browser = "browserBundleID"
+        static let chromeHeight = "chromeHeight"
     }
 
     private let defaults: UserDefaults
@@ -42,7 +45,17 @@ public final class UserDefaultsSettings: LittleSettings {
         BrowserAdapter.forBundleID(defaults.string(forKey: Key.browser) ?? "") ?? .dia
     }
 
-    /// Little windows open at the size the user last resized one to (page area, without the browser's title bar).
+    public var chromeHeight: CGFloat {
+        (defaults.object(forKey: Key.chromeHeight) as? Double).map { CGFloat($0) } ?? browser.chromeHeight
+    }
+
+    /// Stores a measured title-bar height; implausible values (a window caught mid-animation) are ignored.
+    public func rememberChromeHeight(_ height: CGFloat) {
+        guard (20...200).contains(height) else { return }
+        defaults.set(Double(height), forKey: Key.chromeHeight)
+    }
+
+        /// Little windows open at the size the user last resized one to (page area, without the browser's title bar).
     public func rememberSize(_ bounds: Bounds) {
         defaults.set(Double(bounds.width), forKey: Key.width)
         defaults.set(Double(bounds.height), forKey: Key.height)

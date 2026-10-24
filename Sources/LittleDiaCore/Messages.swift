@@ -17,7 +17,8 @@ public struct Bounds: Codable, Equatable, Sendable {
 
 /// Messages the app sends to the extension.
 public enum OutboundMessage: Equatable, Sendable {
-    case open(requestId: String, url: URL, bounds: Bounds, focused: Bool)
+    /// `chromeHeight` is the title-bar height the app placed the window for, so the extension converts sizes the same way.
+    case open(requestId: String, url: URL, bounds: Bounds, focused: Bool, chromeHeight: Int)
     case move(windowId: Int)
     /// Closes a little window the app gave up on (it never reached the screen).
     case close(windowId: Int)
@@ -55,7 +56,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, windowId, browserBundleID, browserPID, extensionVersion, error, message
+    case type, requestId, url, bounds, focused, chromeHeight, windowId, browserBundleID, browserPID, extensionVersion, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
@@ -74,7 +75,8 @@ extension OutboundMessage: Codable {
         switch try c.decode(String.self, forKey: .type) {
         case "open":
             self = .open(requestId: try c.decode(String.self, forKey: .requestId), url: try c.decodeURL(.url),
-                         bounds: try c.decode(Bounds.self, forKey: .bounds), focused: try c.decode(Bool.self, forKey: .focused))
+                         bounds: try c.decode(Bounds.self, forKey: .bounds), focused: try c.decode(Bool.self, forKey: .focused),
+                         chromeHeight: try c.decode(Int.self, forKey: .chromeHeight))
         case "move":
             self = .move(windowId: try c.decode(Int.self, forKey: .windowId))
         case "close":
@@ -87,12 +89,13 @@ extension OutboundMessage: Codable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Key.self)
         switch self {
-        case let .open(requestId, url, bounds, focused):
+        case let .open(requestId, url, bounds, focused, chromeHeight):
             try c.encode("open", forKey: .type)
             try c.encode(requestId, forKey: .requestId)
             try c.encode(url.absoluteString, forKey: .url)
             try c.encode(bounds, forKey: .bounds)
             try c.encode(focused, forKey: .focused)
+            try c.encode(chromeHeight, forKey: .chromeHeight)
         case let .move(windowId):
             try c.encode("move", forKey: .type)
             try c.encode(windowId, forKey: .windowId)

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -76,4 +76,12 @@ test("nextReconnectDelay doubles while the helper keeps dropping quickly, up to 
 
 test("nextReconnectDelay resets after a connection that lasted", () => {
   assert.equal(nextReconnectDelay(8000, 45000), 1000);
+});
+
+test("addedHeight falls back to the app's measured value when Dia reports no size", () => {
+  assert.equal(addedHeight({ height: 0 }, 750, 80), 80);
+});
+
+test("addedHeight uses the reported window height when there is one", () => {
+  assert.equal(addedHeight({ height: 822 }, 750, 80), 72);
 });

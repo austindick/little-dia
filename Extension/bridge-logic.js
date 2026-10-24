@@ -26,6 +26,14 @@ export function chromeHeight(requestedHeight, createdHeight) {
   return Math.max(0, createdHeight - requestedHeight);
 }
 
+/**
+ * The title-bar height to remember for a window the browser just created: measured from the window when the browser
+ * reports its size, otherwise the value the app measured and sent with the request.
+ */
+export function addedHeight(win, requestedHeight, fallback) {
+  return win.height > 0 ? chromeHeight(requestedHeight, win.height) : fallback;
+}
+
 /** A window's bounds expressed as the page area, the same space chrome.windows.create() takes. */
 export function windowBounds(w, chrome = 0) {
   return { left: w.left, top: w.top + chrome, width: w.width, height: w.height - chrome };

@@ -85,6 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.settings.rememberSize(page)
                 self.logger.notice("little window \(windowId) resized; next ones open at \(page.width)x\(page.height)")
+            },
+            onSettled: { [weak self] _, chromeHeight in
+                guard let self else { return }
+                self.settings.rememberChromeHeight(chromeHeight)
+                self.logger.notice("measured title bar \(Int(chromeHeight.rounded()))pt")
             })
         moveToMain = MoveToMain(
             sendMove: { [weak self] id in

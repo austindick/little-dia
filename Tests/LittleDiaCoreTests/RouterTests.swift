@@ -12,6 +12,7 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     var isEnabled = true
     var littleWindowSize = CGSize(width: 1000, height: 750)
     var browser = BrowserAdapter.dia
+    var chromeHeight: CGFloat = 72
 }
 
 @MainActor private final class FakeLink: ExtensionLink {
@@ -100,7 +101,7 @@ private var abandoned: [Int] = []
 @MainActor @Test func readyBrowserOpensLittleAndActivatesIt() async {
     let (router, _, link, browser) = makeRouter()
     #expect(await router.route(github) == .little(windowId: 42))
-    #expect(link.openCalls == [OpenRequest(requestId: "r1", url: github, bounds: Bounds(left: 300, top: 173, width: 1000, height: 750), focused: true)])
+    #expect(link.openCalls == [OpenRequest(requestId: "r1", url: github, bounds: Bounds(left: 300, top: 173, width: 1000, height: 750), focused: true, chromeHeight: 72)])
     #expect(browser.activateCalls == ["company.thebrowser.dia"])
     #expect(browser.openNormallyCalls.isEmpty)
 }
@@ -200,4 +201,12 @@ private var abandoned: [Int] = []
     #expect(await router.route(github) == .openedNormally(.noScreen))
     #expect(link.openCalls.isEmpty)
     #expect(browser.openNormallyCalls == [github])
+}
+
+@MainActor @Test func routerUsesTheMeasuredChromeHeight() async {
+    let (router, settings, link, _) = makeRouter()
+    settings.chromeHeight = 90
+    _ = await router.route(github)
+    #expect(link.openCalls.first?.chromeHeight == 90)
+    #expect(link.openCalls.first?.bounds == ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: primary, chromeHeight: 90))
 }

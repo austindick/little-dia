@@ -92,8 +92,9 @@ public final class LinkRouter {
 
         guard let screenContext = screen() else { return fallback(.noScreen) }
         let windowsBefore = browser.onScreenWindows(bundleID: bundleID)
+        let chromeHeight = settings.chromeHeight
         var bounds = ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: screenContext,
-                                                       chromeHeight: settings.browser.chromeHeight)
+                                                       chromeHeight: chromeHeight)
         // Don't stack exactly on top of an existing little window: it would hide it and confuse window matching.
         for _ in 0..<10 where matchLittleWindow(windowsBefore, bounds: bounds, excluding: []) != nil {
             bounds = Bounds(left: bounds.left + 30, top: bounds.top + 30, width: bounds.width, height: bounds.height)
@@ -103,7 +104,8 @@ public final class LinkRouter {
         let isTheNewPopup: (WindowCandidate<Int>) -> Bool = {
             !before.contains($0.id) && abs($0.frame.width - CGFloat(bounds.width)) <= CGFloat(bounds.width) * 0.05
         }
-        let request = OpenRequest(requestId: makeRequestID(), url: url, bounds: bounds, focused: true)
+        let request = OpenRequest(requestId: makeRequestID(), url: url, bounds: bounds, focused: true,
+                                  chromeHeight: Int(chromeHeight.rounded()))
 
         // Watch for the popup while the extension is still answering, and bring the browser forward the instant it
         // appears: the popup is drawn behind the current app until then. Once the extension confirms, the popup has
