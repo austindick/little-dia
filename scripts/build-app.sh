@@ -1,37 +1,37 @@
 #!/bin/bash
-# Builds build/LilBrowWow.app. With --install, replaces ~/Applications/LilBrowWow.app, registers it with
+# Builds "build/Little Dia.app". With --install, replaces "~/Applications/Little Dia.app", registers it with
 # LaunchServices and launches it.
 #
-# Signing: set LILBROW_SIGN_IDENTITY to a stable code-signing identity (a self-signed one is fine).
-# With the default ad-hoc signature ("-"), macOS treats every build as a new app, so the Accessibility
+# Signing: set LITTLEDIA_SIGN_IDENTITY to a stable code-signing identity (a self-signed one is fine; releases use
+# "Little Dia"). With the default ad-hoc signature ("-"), macOS treats every build as a new app, so the Accessibility
 # permission has to be granted again after each rebuild.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IDENTITY="${LILBROW_SIGN_IDENTITY:--}"
-APP=build/LilBrowWow.app
+IDENTITY="${LITTLEDIA_SIGN_IDENTITY:--}"
+APP="build/Little Dia.app"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-swift build -c release --product LilBrowWow
-swift build -c release --product lilbrow-host
+swift build -c release --product LittleDia
+swift build -c release --product littledia-host
 BIN="$(swift build -c release --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers"
-cp "$BIN/LilBrowWow" "$APP/Contents/MacOS/LilBrowWow"
-cp "$BIN/lilbrow-host" "$APP/Contents/Helpers/lilbrow-host"
+cp "$BIN/LittleDia" "$APP/Contents/MacOS/LittleDia"
+cp "$BIN/littledia-host" "$APP/Contents/Helpers/littledia-host"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 if [[ "$IDENTITY" == "-" ]]; then
-  echo "warning: ad-hoc signing; Accessibility access must be re-granted after every build (set LILBROW_SIGN_IDENTITY)" >&2
+  echo "warning: ad-hoc signing; Accessibility access must be re-granted after every build (set LITTLEDIA_SIGN_IDENTITY)" >&2
 fi
-codesign --force --sign "$IDENTITY" "$APP/Contents/Helpers/lilbrow-host"
+codesign --force --sign "$IDENTITY" --identifier com.austindick.littledia.host "$APP/Contents/Helpers/littledia-host"
 codesign --force --sign "$IDENTITY" "$APP"
 echo "built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
-  DEST="$HOME/Applications/LilBrowWow.app"
-  pkill -x LilBrowWow || true
+  DEST="$HOME/Applications/Little Dia.app"
+  pkill -x LittleDia || true
   mkdir -p "$HOME/Applications"
   rm -rf "$DEST"
   cp -R "$APP" "$DEST"

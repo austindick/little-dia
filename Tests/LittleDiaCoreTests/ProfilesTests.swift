@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 private func makeUserData(profiles: [String: String], extensionIn: String?) throws -> URL {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

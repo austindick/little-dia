@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 @Test func encodePrefixesLittleEndianLength() {
     #expect(NativeMessageFraming.encode(Data("{}".utf8)) == Data([2, 0, 0, 0, 0x7B, 0x7D]))

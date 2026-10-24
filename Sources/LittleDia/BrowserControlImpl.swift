@@ -1,11 +1,11 @@
 import AppKit
-import LilBrowCore
+import LittleDiaCore
 import os
 
 /// The real browser app, driven through NSWorkspace and NSRunningApplication.
 @MainActor
 final class BrowserControlImpl: BrowserControl {
-    private let logger = Logger(subsystem: "com.lilbrowwow", category: "browser")
+    private let logger = Logger(subsystem: "com.austindick.littledia", category: "browser")
 
     func isRunning(bundleID: String) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty

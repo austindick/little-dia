@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import LilBrowCore
+import LittleDiaCore
 import os
 
 struct TrackedWindow: Equatable {
@@ -28,7 +28,7 @@ final class LittleWindowTracker {
 
     private let onChange: (TrackedWindow?) -> Void
     private let onResize: (Int, Bounds) -> Void
-    private let logger = Logger(subsystem: "com.lilbrowwow", category: "tracker")
+    private let logger = Logger(subsystem: "com.austindick.littledia", category: "tracker")
     private var entries: [Int: Entry] = [:]
     private var browserPID: pid_t?
     private var observer: AXObserver?

@@ -1,5 +1,5 @@
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 @MainActor private final class World {
     var browserFrontmost = true
@@ -7,7 +7,7 @@ import Testing
     var browserWindowChecksLeft: Int? = 0
     var activated: [String] = []
     lazy var focus = FocusReturn<String>(
-        isOwnOrBrowser: { $0 == "Lil Brow Wow" || $0 == "Dia" },
+        isOwnOrBrowser: { $0 == "Little Dia" || $0 == "Dia" },
         browserIsFrontmost: { self.browserFrontmost },
         browserHasWindowOnThisDesktop: {
             guard let left = self.browserWindowChecksLeft else { return true }
@@ -66,8 +66,8 @@ import Testing
 @MainActor @Test func originIsTheLastOtherAppWhenThisAppIsFrontmost() {   // macOS activates us when the link arrives
     let w = World()
     w.focus.appActivated("Slack")
-    w.focus.appActivated("Lil Brow Wow")
-    #expect(w.focus.origin(frontmost: "Lil Brow Wow") == "Slack")
+    w.focus.appActivated("Little Dia")
+    #expect(w.focus.origin(frontmost: "Little Dia") == "Slack")
 }
 
 @MainActor @Test func originIsTheFrontmostAppWhenItIsSomeoneElse() {

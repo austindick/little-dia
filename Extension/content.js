@@ -9,7 +9,7 @@
   }
   if (!isLittle) return;
 
-  const { classifyClick } = globalThis.LilBrowClickRules;
+  const { classifyClick } = globalThis.LittleDiaClickRules;
   const onClick = (event) => {
     const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
     if (!anchor) return;

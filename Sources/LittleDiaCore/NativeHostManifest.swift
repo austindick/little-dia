@@ -1,13 +1,13 @@
 import Foundation
 
-/// The JSON file that tells a Chromium browser where the `lilbrow-host` helper lives and which extension may use it.
+/// The JSON file that tells a Chromium browser where the `littledia-host` helper lives and which extension may use it.
 public enum NativeHostManifest {
     public static var fileName: String { "\(ExtensionIdentity.nativeHostName).json" }
 
     public static func json(hostExecutablePath: String) throws -> Data {
         let manifest: [String: Any] = [
             "name": ExtensionIdentity.nativeHostName,
-            "description": "Lil Brow Wow bridge",
+            "description": "Little Dia bridge",
             "path": hostExecutablePath,
             "type": "stdio",
             "allowed_origins": ["chrome-extension://\(ExtensionIdentity.chromiumID)/"],

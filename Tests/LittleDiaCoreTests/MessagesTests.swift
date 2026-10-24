@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
 

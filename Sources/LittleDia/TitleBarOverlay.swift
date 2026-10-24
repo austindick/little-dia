@@ -1,5 +1,5 @@
 import AppKit
-import LilBrowCore
+import LittleDiaCore
 
 /// The Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.

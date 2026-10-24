@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 private let github = URL(string: "https://github.com/pulls")!
 private let primary = ScreenContext(visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 976), primaryScreenHeight: 1000)

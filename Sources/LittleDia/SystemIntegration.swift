@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import LilBrowCore
+import LittleDiaCore
 import ServiceManagement
 
 @MainActor

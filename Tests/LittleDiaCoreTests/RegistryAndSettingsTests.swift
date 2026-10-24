@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 @Test func registryTracksURLChanges() {
     let registry = LittleWindowRegistry()
@@ -16,7 +16,7 @@ import Testing
 }
 
 @MainActor @Test func settingsDefaultsAndRememberSize() {
-    let suite = "lbw-test-\(UUID().uuidString)"
+    let suite = "ld-test-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let settings = UserDefaultsSettings(defaults: defaults)

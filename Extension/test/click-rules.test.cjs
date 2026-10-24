@@ -1,7 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 require("../click-rules.js");
-const { classifyClick } = globalThis.LilBrowClickRules;
+const { classifyClick } = globalThis.LittleDiaClickRules;
 
 const base = { href: "https://x.com/a", target: "", hasDownload: false };
 const cases = [

@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "LilBrowWow",
+    name: "LittleDia",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "LilBrowWow", targets: ["LilBrowWow"]),
-        .executable(name: "lilbrow-host", targets: ["lilbrow-host"]),
+        .executable(name: "LittleDia", targets: ["LittleDia"]),
+        .executable(name: "littledia-host", targets: ["littledia-host"]),
     ],
     targets: [
-        .target(name: "LilBrowCore"),
-        .executableTarget(name: "LilBrowWow", dependencies: ["LilBrowCore"]),
-        .executableTarget(name: "lilbrow-host", dependencies: ["LilBrowCore"]),
-        .testTarget(name: "LilBrowCoreTests", dependencies: ["LilBrowCore"]),
+        .target(name: "LittleDiaCore"),
+        .executableTarget(name: "LittleDia", dependencies: ["LittleDiaCore"]),
+        .executableTarget(name: "littledia-host", dependencies: ["LittleDiaCore"]),
+        .testTarget(name: "LittleDiaCoreTests", dependencies: ["LittleDiaCore"]),
     ],
     swiftLanguageModes: [.v5]
 )

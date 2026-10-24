@@ -59,7 +59,7 @@ public final class LinkRouter {
     private let makeRequestID: () -> String
     /// Called with a popup the router gave up on (it never reached the screen in time), so it can be closed natively.
     public var onAbandon: ((Int) -> Void)?
-    private let logger = Logger(subsystem: "com.lilbrowwow", category: "router")
+    private let logger = Logger(subsystem: "com.austindick.littledia", category: "router")
 
     public init(settings: LittleSettings, link: ExtensionLink, browser: BrowserControl, screen: @escaping () -> ScreenContext,
                 timeouts: RouterTimeouts = .init(), makeRequestID: @escaping () -> String = { UUID().uuidString }) {

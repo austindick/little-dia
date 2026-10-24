@@ -22,5 +22,5 @@
     return opensNewTab ? "little" : "default";
   }
 
-  globalThis.LilBrowClickRules = { classifyClick };
+  globalThis.LittleDiaClickRules = { classifyClick };
 })();

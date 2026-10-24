@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 @Test func chromiumIDMatchesManifestKey() throws {
     let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -15,10 +15,20 @@ import Testing
     #expect(id == ExtensionIdentity.chromiumID)
 }
 
+@Test func infoPlistUsesTheNewName() throws {
+    let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let data = try Data(contentsOf: repo.appendingPathComponent("Resources/Info.plist"))
+    let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as! [String: Any]
+    #expect(plist["CFBundleIdentifier"] as? String == "com.austindick.littledia")
+    #expect(plist["CFBundleName"] as? String == "Little Dia")
+    #expect(plist["CFBundleExecutable"] as? String == "LittleDia")
+}
+
 @Test func manifestJSONHasRequiredFields() throws {
-    let json = try JSONSerialization.jsonObject(with: NativeHostManifest.json(hostExecutablePath: "/x/lilbrow-host")) as! [String: Any]
-    #expect(json["name"] as? String == "com.lilbrowwow.bridge")
-    #expect(json["path"] as? String == "/x/lilbrow-host")
+    let json = try JSONSerialization.jsonObject(with: NativeHostManifest.json(hostExecutablePath: "/x/littledia-host")) as! [String: Any]
+    #expect(json["name"] as? String == "com.austindick.littledia.bridge")
+    #expect(json["description"] as? String == "Little Dia bridge")
+    #expect(json["path"] as? String == "/x/littledia-host")
     #expect(json["type"] as? String == "stdio")
     #expect(json["allowed_origins"] as? [String] == ["chrome-extension://\(ExtensionIdentity.chromiumID)/"])
 }
@@ -26,10 +36,10 @@ import Testing
 @Test func installWritesBothDiaLocations() throws {
     let support = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: support) }
-    let written = try NativeHostManifest.install(hostExecutablePath: "/x/lilbrow-host", adapter: .dia, applicationSupport: support)
+    let written = try NativeHostManifest.install(hostExecutablePath: "/x/littledia-host", adapter: .dia, applicationSupport: support)
     #expect(written.count == 2)
-    #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Dia/NativeMessagingHosts/com.lilbrowwow.bridge.json").path))
-    #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Dia/User Data/NativeMessagingHosts/com.lilbrowwow.bridge.json").path))
+    #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Dia/NativeMessagingHosts/com.austindick.littledia.bridge.json").path))
+    #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Dia/User Data/NativeMessagingHosts/com.austindick.littledia.bridge.json").path))
 }
 
 @Test func detectsDesktopAssignment() {

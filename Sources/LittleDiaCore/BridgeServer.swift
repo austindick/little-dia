@@ -7,7 +7,7 @@ public protocol BridgeServerDelegate: AnyObject {
     func bridgeConnectionsChanged(_ server: BridgeServer)
 }
 
-/// The Unix-socket server inside the app. Each `lilbrow-host` helper (one per browser profile running the extension)
+/// The Unix-socket server inside the app. Each `littledia-host` helper (one per browser profile running the extension)
 /// connects and introduces itself with `hostHello`, which makes it **ready**.
 /// Socket reads happen on a private queue; all state and delegate callbacks are on the main actor.
 @MainActor
@@ -15,12 +15,12 @@ public final class BridgeServer {
     public weak var delegate: BridgeServerDelegate?
 
     private let socketPath: String
-    private let ioQueue = DispatchQueue(label: "com.lilbrowwow.bridge.io")
+    private let ioQueue = DispatchQueue(label: "com.austindick.littledia.bridge.io")
     private var listenSource: DispatchSourceRead?
     private var connections: [Int: Connection] = [:]
     private var nextConnectionID = 0
     private var readySequence = 0
-    private let logger = Logger(subsystem: "com.lilbrowwow", category: "bridge")
+    private let logger = Logger(subsystem: "com.austindick.littledia", category: "bridge")
 
     private final class Connection {
         let fd: Int32

@@ -1,10 +1,10 @@
 import AppKit
-import LilBrowCore
+import LittleDiaCore
 import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let logger = Logger(subsystem: "com.lilbrowwow", category: "app")
+    private let logger = Logger(subsystem: "com.austindick.littledia", category: "app")
     private let browserControl = BrowserControlImpl()
     private let registry = LittleWindowRegistry()
     private var settings: UserDefaultsSettings!
@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings = UserDefaultsSettings()
 
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let ownFolder = applicationSupport.appendingPathComponent("LilBrowWow", isDirectory: true)
+        let ownFolder = applicationSupport.appendingPathComponent("Little Dia", isDirectory: true)
         try? FileManager.default.createDirectory(at: ownFolder, withIntermediateDirectories: true)
 
         server = BridgeServer(socketPath: ownFolder.appendingPathComponent("bridge.sock").path)
@@ -187,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Runs an AppleScript with `osascript`, so the main thread stays free (the first run may wait on the
-    /// "Lil Brow Wow wants to control Dia" permission prompt).
+    /// "Little Dia wants to control Dia" permission prompt).
     private func runAppleScript(_ source: String) async -> Bool {
         let logger = self.logger
         return await withCheckedContinuation { continuation in
@@ -245,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installNativeHostManifests(applicationSupport: URL) {
-        let hostPath = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/lilbrow-host").path
+        let hostPath = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/littledia-host").path
         for adapter in BrowserAdapter.all where NSWorkspace.shared.urlForApplication(withBundleIdentifier: adapter.bundleID) != nil {
             do {
                 let files = try NativeHostManifest.install(hostExecutablePath: hostPath, adapter: adapter, applicationSupport: applicationSupport)

@@ -59,7 +59,7 @@ private enum Key: String, CodingKey {
     case type, requestId, url, bounds, focused, windowId, browserBundleID, browserPID, extensionVersion, error, message
 }
 
-private extension KeyedDecodingContainer where Key == LilBrowCore.Key {
+private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
     func decodeURL(_ key: Key) throws -> URL {
         let string = try decode(String.self, forKey: key)
         guard let url = URL(string: string) else {

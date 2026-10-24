@@ -1,6 +1,6 @@
 import Foundation
 
-/// The heart of `lilbrow-host`: relays whole native-messaging frames between the browser (stdin/stdout) and the
+/// The heart of `littledia-host`: relays whole native-messaging frames between the browser (stdin/stdout) and the
 /// menu-bar app (Unix socket), reconnecting to the app whenever it goes away.
 public final class HostRelay {
     private let input: FileHandle
@@ -89,6 +89,6 @@ public final class HostRelay {
     }
 
     private func log(_ message: String) {
-        FileHandle.standardError.write(Data("lilbrow-host: \(message)\n".utf8))
+        FileHandle.standardError.write(Data("littledia-host: \(message)\n".utf8))
     }
 }

@@ -2,5 +2,5 @@
 /// manifest can allow exactly this extension.
 public enum ExtensionIdentity {
     public static let chromiumID = "ofecdibidhgnemdblacfbinlhngigjnm"
-    public static let nativeHostName = "com.lilbrowwow.bridge"
+    public static let nativeHostName = "com.austindick.littledia.bridge"
 }

@@ -1,5 +1,5 @@
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 @MainActor private final class Recorder {
     var canCloseNatively = true

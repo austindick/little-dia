@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 private let hostHello = InboundMessage.hostHello(browserBundleID: "test.browser", browserPID: 1)
 

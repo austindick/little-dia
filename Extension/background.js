@@ -1,8 +1,8 @@
-// Lil Brow Wow service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
-// happens to them. Talks to the app through the native-messaging helper `com.lilbrowwow.bridge`.
+// Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
+// happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
 import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds, makeSerial } from "./bridge-logic.js";
 
-const HOST = "com.lilbrowwow.bridge";
+const HOST = "com.austindick.littledia.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used when Dia doesn't report window sizes.
 const DIA_CHROME_HEIGHT = 72;
 let port = null;
@@ -14,15 +14,15 @@ function connect() {
   try {
     port = chrome.runtime.connectNative(HOST);
   } catch (e) {
-    console.warn("Lil Brow Wow: connectNative failed", e);
+    console.warn("Little Dia: connectNative failed", e);
     port = null;
     return;
   }
   port.onMessage.addListener((msg) => {
-    handleAppMessage(msg).catch((e) => console.error("Lil Brow Wow: handling", msg, e));
+    handleAppMessage(msg).catch((e) => console.error("Little Dia: handling", msg, e));
   });
   port.onDisconnect.addListener(() => {
-    console.warn("Lil Brow Wow: native host disconnected:", chrome.runtime.lastError?.message);
+    console.warn("Little Dia: native host disconnected:", chrome.runtime.lastError?.message);
     port = null;
   });
   post({ type: "hello", extensionVersion: chrome.runtime.getManifest().version });
@@ -33,7 +33,7 @@ function post(msg) {
   try {
     port.postMessage(msg);
   } catch (e) {
-    console.warn("Lil Brow Wow: postMessage failed", e);
+    console.warn("Little Dia: postMessage failed", e);
   }
 }
 
@@ -138,7 +138,7 @@ async function handleAppMessage(msg) {
       await chrome.windows.remove(msg.windowId).catch(() => {});
       break;
     default:
-      console.warn("Lil Brow Wow: unknown message from app", msg);
+      console.warn("Little Dia: unknown message from app", msg);
   }
 }
 
@@ -185,7 +185,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;   // responds asynchronously
   }
   if (msg.type === "openLittle" && windowId != null) {
-    openFromLittleWindow(windowId, msg.url).catch((e) => console.error("Lil Brow Wow: openLittle", e));
+    openFromLittleWindow(windowId, msg.url).catch((e) => console.error("Little Dia: openLittle", e));
   }
   return false;
 });

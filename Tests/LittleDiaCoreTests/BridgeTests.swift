@@ -1,12 +1,12 @@
 import Foundation
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 private let browser = "test.browser"
 private let github = URL(string: "https://github.com/")!
 private let someBounds = Bounds(left: 300, top: 137, width: 1000, height: 750)
 
-/// A fake `lilbrow-host` connection.
+/// A fake `littledia-host` connection.
 private final class TestClient: @unchecked Sendable {
     let fd: Int32
     let reader: FrameReader

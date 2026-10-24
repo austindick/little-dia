@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 private let primary = ScreenContext(visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 976), primaryScreenHeight: 1000)
 private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)

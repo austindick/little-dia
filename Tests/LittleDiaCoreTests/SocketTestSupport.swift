@@ -1,8 +1,8 @@
 import Foundation
-@testable import LilBrowCore
+@testable import LittleDiaCore
 
 func makeSocketPath() -> String {
-    NSTemporaryDirectory() + "lbw-\(UUID().uuidString.prefix(8)).sock"
+    NSTemporaryDirectory() + "ld-\(UUID().uuidString.prefix(8)).sock"
 }
 
 struct TimedOut: Error {}

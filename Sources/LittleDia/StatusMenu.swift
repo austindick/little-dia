@@ -1,5 +1,5 @@
 import AppKit
-import LilBrowCore
+import LittleDiaCore
 
 /// The menu-bar item. The menu is rebuilt every time it opens so its status lines are current.
 @MainActor
@@ -13,7 +13,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         self.settings = settings
         self.link = link
         super.init()
-        let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "Lil Brow Wow")
+        let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "Little Dia")
         image?.isTemplate = true
         statusItem.button?.image = image
         menu.delegate = self
@@ -45,9 +45,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             })
         }
         if SystemIntegration.isDefaultBrowser() {
-            menu.addItem(status("Default Browser: Lil Brow Wow"))
+            menu.addItem(status("Default Browser: Little Dia"))
         } else {
-            menu.addItem(action("Make Lil Brow Wow the Default Browser…") {
+            menu.addItem(action("Make Little Dia the Default Browser…") {
                 Task { await SystemIntegration.makeDefaultBrowser() }
             })
         }
@@ -59,7 +59,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         })
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Lil Brow Wow", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Little Dia", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
     }
 

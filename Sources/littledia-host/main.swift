@@ -1,8 +1,8 @@
-// lilbrow-host: the native-messaging helper a Chromium browser launches for the Lil Brow Wow extension.
+// littledia-host: the native-messaging helper a Chromium browser launches for the Little Dia extension.
 // It relays frames between the browser (stdin/stdout) and the menu-bar app's Unix socket.
 // stdout is the protocol channel: log only to stderr.
 import AppKit
-import LilBrowCore
+import LittleDiaCore
 
 signal(SIGPIPE, SIG_IGN)
 
@@ -29,10 +29,10 @@ func launchingBrowser() -> (bundleID: String, pid: pid_t) {
 }
 
 let environment = ProcessInfo.processInfo.environment
-let socketPath = environment["LILBROW_SOCKET"]
-    ?? (NSHomeDirectory() + "/Library/Application Support/LilBrowWow/bridge.sock")
+let socketPath = environment["LITTLEDIA_SOCKET"]
+    ?? (NSHomeDirectory() + "/Library/Application Support/Little Dia/bridge.sock")
 let browser = launchingBrowser()
-FileHandle.standardError.write(Data("lilbrow-host: browser=\(browser.bundleID) pid=\(browser.pid) socket=\(socketPath)\n".utf8))
+FileHandle.standardError.write(Data("littledia-host: browser=\(browser.bundleID) pid=\(browser.pid) socket=\(socketPath)\n".utf8))
 
 HostRelay(input: .standardInput, output: .standardOutput, socketPath: socketPath,
           hello: .hostHello(browserBundleID: browser.bundleID, browserPID: browser.pid)).run()
