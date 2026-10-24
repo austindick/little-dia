@@ -69,8 +69,11 @@ public final class UserDefaultsSettings: LittleSettings {
         defaults.set(Double(height), forKey: Key.chromeHeight)
     }
 
-        /// Little windows open at the size the user last resized one to (page area, without the browser's title bar).
+    /// Little windows open at the size the user last resized one to (page area, without the browser's title bar).
+    /// A size below the minimum isn't one a person chose (a window's thumbnail in Mission Control, say) and is ignored.
     public func rememberSize(_ bounds: Bounds) {
+        guard CGFloat(bounds.width) >= ScreenGeometry.minimumSize.width,
+              CGFloat(bounds.height) >= ScreenGeometry.minimumSize.height else { return }
         defaults.set(Double(bounds.width), forKey: Key.width)
         defaults.set(Double(bounds.height), forKey: Key.height)
     }

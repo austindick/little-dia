@@ -29,6 +29,22 @@ import Testing
     #expect(!UserDefaultsSettings(defaults: defaults).isEnabled)
 }
 
+/// Owner's report, 2026-10-24: a click in Mission Control saved the window's thumbnail, 103 by -4, so the next little
+/// window opened at the minimum size.
+@MainActor @Test func settingsIgnoresASizeBelowTheMinimum() {
+    let suite = "ld-test-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = UserDefaultsSettings(defaults: defaults)
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 1364, height: 797))
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 103, height: -4))
+    #expect(settings.littleWindowSize == CGSize(width: 1364, height: 797))
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 900, height: 300))
+    #expect(settings.littleWindowSize == CGSize(width: 1364, height: 797))
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 480, height: 360))   // the minimum itself is fine
+    #expect(settings.littleWindowSize == CGSize(width: 480, height: 360))
+}
+
 @MainActor @Test func settingsRemembersAPlausibleChromeHeight() {
     let suite = "ld-test-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!

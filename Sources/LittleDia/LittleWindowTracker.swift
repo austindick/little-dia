@@ -257,11 +257,13 @@ final class LittleWindowTracker {
         onChange(nil)
     }
 
-    /// If the drag that just ended changed the window's size, report the new page area.
+    /// If the drag that just ended changed the window's size, report the new page area. The size comes from the
+    /// browser's own window (Accessibility), not the window server: in Mission Control the window server reports a
+    /// window at its thumbnail size, and a click there would otherwise count as resizing it.
     private func noteResize() {
-        guard let start = dragStart, let entry = entries[start.windowId], let number = entry.windowNumber,
-              let end = serverInfo(of: number)?.frame else { return }
+        guard let start = dragStart else { return }
         dragStart = nil
+        guard let entry = entries[start.windowId], let end = frame(of: entry.element) else { return }
         guard abs(end.width - start.frameTopLeft.width) > 1 || abs(end.height - start.frameTopLeft.height) > 1 else { return }
         let chromeHeight = max(0, start.frameTopLeft.height - entry.pageHeight)
         let page = ScreenGeometry.pageBounds(ofWindow: end, chromeHeight: chromeHeight)
