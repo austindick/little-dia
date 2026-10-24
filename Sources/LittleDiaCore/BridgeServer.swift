@@ -5,6 +5,12 @@ import os
 public protocol BridgeServerDelegate: AnyObject {
     func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String)
     func bridgeConnectionsChanged(_ server: BridgeServer)
+    /// A connection ended; anything sent on it will never be answered.
+    func bridge(_ server: BridgeServer, connectionClosed id: Int)
+}
+
+public extension BridgeServerDelegate {
+    func bridge(_ server: BridgeServer, connectionClosed id: Int) {}
 }
 
 /// The Unix-socket server inside the app. Each `littledia-host` helper (one per browser profile running the extension)
@@ -72,20 +78,23 @@ public final class BridgeServer {
     }
 
     public func browserPID(for bundleID: String) -> pid_t? {
-        newestReady(for: bundleID)?.browserPID
+        newestReady(for: bundleID)?.connection.browserPID
     }
 
-    /// Sends to the most recently readied connection for that browser. Returns false if there is none.
+    /// Sends to the most recently readied connection for that browser. Returns that connection's ID, or nil if there
+    /// is none or the write failed.
     @discardableResult
-    public func send(_ message: OutboundMessage, to bundleID: String) -> Bool {
-        guard let connection = newestReady(for: bundleID), let payload = try? MessageCoding.encode(message) else { return false }
-        return UnixSocket.writeAll(connection.fd, NativeMessageFraming.encode(payload))
+    public func send(_ message: OutboundMessage, to bundleID: String) -> Int? {
+        guard let (id, connection) = newestReady(for: bundleID), let payload = try? MessageCoding.encode(message),
+              UnixSocket.writeAll(connection.fd, NativeMessageFraming.encode(payload)) else { return nil }
+        return id
     }
 
-    private func newestReady(for bundleID: String) -> Connection? {
-        connections.values
-            .filter { $0.browserBundleID == bundleID && $0.readyOrder != nil }
-            .max { $0.readyOrder! < $1.readyOrder! }
+    private func newestReady(for bundleID: String) -> (id: Int, connection: Connection)? {
+        connections
+            .filter { $0.value.browserBundleID == bundleID && $0.value.readyOrder != nil }
+            .max { $0.value.readyOrder! < $1.value.readyOrder! }
+            .map { (id: $0.key, connection: $0.value) }
     }
 
     private func add(_ fd: Int32) {
@@ -129,6 +138,7 @@ public final class BridgeServer {
         guard let connection = connections.removeValue(forKey: id) else { return }
         connection.source?.cancel()
         logger.notice("connection closed (\(connection.browserBundleID ?? "unknown", privacy: .public))")
+        delegate?.bridge(self, connectionClosed: id)
         if notify { delegate?.bridgeConnectionsChanged(self) }
     }
 

@@ -70,7 +70,7 @@ private final class TestClient: @unchecked Sendable {
     let second = try TestClient(path: path)
     try second.ready(pid: 2)
     #expect(await until { server.browserPID(for: browser) == 2 })
-    #expect(server.send(.move(windowId: 42), to: browser))
+    #expect(server.send(.move(windowId: 42), to: browser) != nil)
     #expect(try await second.readOutbound() == .move(windowId: 42))
     await #expect(throws: TimedOut.self) { _ = try await first.readOutbound(timeout: 0.3) }
 }
@@ -181,4 +181,20 @@ private final class TestClient: @unchecked Sendable {
 
 @Test func parentPIDOfThisProcess() {
     #expect(ProcessTree.parentPID(of: getpid()) == getppid())
+}
+
+/// Dia quitting (or the helper being replaced) mid-open must fall back at once, not after the 4-second ack timeout.
+@MainActor @Test func inFlightOpenFailsWhenItsConnectionDrops() async throws {
+    let (server, path) = try startServer(); defer { server.stop() }
+    let link = BridgeExtensionLink(server: server)
+    let client = try TestClient(path: path)
+    try client.ready()
+    #expect(await until { link.isReady(browser: browser) })
+    let clock = ContinuousClock()
+    let started = clock.now
+    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true), browser: browser, timeout: .seconds(5))
+    _ = try await client.readOutbound()
+    client.close()
+    #expect(await result == .failed("connection lost"))
+    #expect(clock.now - started < .seconds(1))
 }

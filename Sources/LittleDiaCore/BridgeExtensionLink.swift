@@ -37,7 +37,8 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
     public var onConnectionsChanged: (() -> Void)?
 
     private let server: BridgeServer
-    private var pendingOpens: [String: CheckedContinuation<OpenResult, Never>] = [:]
+    /// Opens awaiting the extension's answer, with the connection each was sent on.
+    private var pendingOpens: [String: (continuation: CheckedContinuation<OpenResult, Never>, connection: Int)] = [:]
     private var readyWaiters: [UUID: (browser: String, continuation: CheckedContinuation<Bool, Never>)] = [:]
 
     public init(server: BridgeServer) {
@@ -63,12 +64,12 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
 
     public func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult {
         let message = OutboundMessage.open(requestId: request.requestId, url: request.url, bounds: request.bounds, focused: request.focused)
-        guard server.send(message, to: browser) else { return .failed("extension not connected") }
+        guard let connection = server.send(message, to: browser) else { return .failed("extension not connected") }
         return await withCheckedContinuation { continuation in
-            pendingOpens[request.requestId] = continuation
+            pendingOpens[request.requestId] = (continuation, connection)
             Task { @MainActor in
                 try? await Task.sleep(for: timeout)
-                self.pendingOpens.removeValue(forKey: request.requestId)?.resume(returning: .timedOut)
+                self.pendingOpens.removeValue(forKey: request.requestId)?.continuation.resume(returning: .timedOut)
             }
         }
     }
@@ -80,13 +81,20 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
     public func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String) {
         switch message {
         case let .opened(requestId?, windowId, _, _):
-            pendingOpens.removeValue(forKey: requestId)?.resume(returning: .opened(windowId: windowId))
+            pendingOpens.removeValue(forKey: requestId)?.continuation.resume(returning: .opened(windowId: windowId))
         case let .openFailed(requestId, error):
-            pendingOpens.removeValue(forKey: requestId)?.resume(returning: .failed(error))
+            pendingOpens.removeValue(forKey: requestId)?.continuation.resume(returning: .failed(error))
         default:
             break
         }
         onEvent?(message, bundleID)
+    }
+
+    public func bridge(_ server: BridgeServer, connectionClosed id: Int) {
+        for (requestId, pending) in pendingOpens where pending.connection == id {
+            pendingOpens.removeValue(forKey: requestId)
+            pending.continuation.resume(returning: .failed("connection lost"))
+        }
     }
 
     public func bridgeConnectionsChanged(_ server: BridgeServer) {
