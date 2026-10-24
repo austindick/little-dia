@@ -25,9 +25,10 @@ downloaded in a browser.
 The setup window ticks each step off as you finish it:
 
 1. **Make it your default browser.** Links from other apps come to Little Dia first; it hands them to Dia.
-2. **Add the extension to Dia.** Click *Open Extensions Page* and turn on **Developer mode** (top right). Then drag
-   the Little Dia folder onto the page, or click **Load unpacked** and choose it. *Show Folder* shows you the folder
-   (`~/Library/Application Support/Little Dia/Extension`). Add it in the Dia profile you want little windows to use.
+2. **Add the extension to Dia.** Click *Open Extensions Page* and turn on **Developer mode** (top right). Click
+   *Show Folder*, then drag the highlighted **Extension** folder onto the page (or click **Load unpacked** and choose
+   it). It lives at `~/Library/Application Support/Little Dia/Extension`. Add it in the Dia profile you want little
+   windows to use.
 3. **Allow the title-bar buttons.** Turn on Little Dia in System Settings › Privacy & Security › Accessibility.
 4. Only if it's needed: **Dia is pinned to one desktop.** Dock › right-click Dia › Options › Assign To › None.
 

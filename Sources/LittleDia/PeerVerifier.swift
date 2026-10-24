@@ -16,14 +16,16 @@ enum PeerVerifier {
         let helper = SendableRequirement(helperRequirement)
         let browser = SendableRequirement(browserRequirement.flatMap(requirement(from:)))
         return { pid in
-            let trusted = PeerCheck.isTrusted(
+            let verdict = PeerCheck.evaluate(
                 peer: pid, helperPath: helperPath,
                 executablePath: executablePath(of:),
                 parent: ProcessTree.parentPID(of:),
-                hasValidSignature: { satisfies($0, helper.value) },
-                isBrowser: { satisfies($0, browser.value) })
-            if !trusted { logger.notice("connection from pid \(pid) is not the bundled helper launched by the browser") }
-            return trusted
+                hasValidSignature: { satisfies($0, helper.value, what: "helper") },
+                isBrowser: { satisfies($0, browser.value, what: "browser") })
+            if verdict != .trusted {
+                logger.notice("rejected pid \(pid): \(verdict.reason(helperPath: helperPath), privacy: .public)")
+            }
+            return verdict == .trusted
         }
     }
 
@@ -35,12 +37,17 @@ enum PeerVerifier {
 
     /// True when the running process `pid` has an intact signature that meets `requirement`. A nil requirement never
     /// matches, so a browser without one (or a helper whose requirement couldn't be read) is never trusted.
-    private static func satisfies(_ pid: pid_t, _ requirement: SecRequirement?) -> Bool {
-        guard let requirement else { return false }
+    private static func satisfies(_ pid: pid_t, _ requirement: SecRequirement?, what: String) -> Bool {
+        guard let requirement else {
+            logger.notice("no code requirement for the \(what, privacy: .public); pid \(pid) can't be checked")
+            return false
+        }
         var code: SecCode?
         let attributes = [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary
-        guard SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess, let code else { return false }
-        return SecCodeCheckValidity(code, [], requirement) == errSecSuccess
+        var status = SecCodeCopyGuestWithAttributes(nil, attributes, [], &code)
+        if status == errSecSuccess, let code { status = SecCodeCheckValidity(code, [], requirement) }
+        if status != errSecSuccess { logger.notice("pid \(pid) fails the \(what, privacy: .public) signature check (OSStatus \(status))") }
+        return status == errSecSuccess
     }
 
     private static func requirement(from text: String) -> SecRequirement? {

@@ -141,7 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 copyDiagnostics: { [weak self] in self?.copyDiagnostics() },
                                 updateOffer: { [weak self] in self?.updater.offer },
                                 checkForUpdates: { [weak self] in Task { await self?.updater.check(userInitiated: true) } },
-                                installUpdate: { [weak self] offer in Task { await self?.updater.install(offer) } })
+                                installUpdate: { [weak self] offer in Task { await self?.updater.install(offer) } },
+                                isUpdating: { [weak self] in self?.updater.state == .installing })
         updater.onChange = { [weak self] in self?.statusMenu?.refresh() }
     }
 

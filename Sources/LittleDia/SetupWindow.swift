@@ -115,7 +115,7 @@ struct SetupView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("1. Open Dia's Extensions page")
                             Text("2. Turn on **Developer mode** (top right)")
-                            Text("3. Drag the Little Dia folder onto the page, or click **Load unpacked** and choose it")
+                            Text("3. Click **Show Folder**, then drag the highlighted **Extension** folder onto the page (or click **Load unpacked** and choose it)")
                         }
                         .font(.system(size: 12.5))
                         .fixedSize(horizontal: false, vertical: true)

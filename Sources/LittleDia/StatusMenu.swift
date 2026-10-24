@@ -12,12 +12,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let updateOffer: () -> UpdateOffer?
     private let checkForUpdates: () -> Void
     private let installUpdate: (UpdateOffer) -> Void
+    private let isUpdating: () -> Bool
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
     init(settings: UserDefaultsSettings, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
          copyDiagnostics: @escaping () -> Void, updateOffer: @escaping () -> UpdateOffer?,
-         checkForUpdates: @escaping () -> Void, installUpdate: @escaping (UpdateOffer) -> Void) {
+         checkForUpdates: @escaping () -> Void, installUpdate: @escaping (UpdateOffer) -> Void,
+         isUpdating: @escaping () -> Bool) {
         self.settings = settings
         self.status = status
         self.showSetup = showSetup
@@ -25,6 +27,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         self.updateOffer = updateOffer
         self.checkForUpdates = checkForUpdates
         self.installUpdate = installUpdate
+        self.isUpdating = isUpdating
         super.init()
         let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "Little Dia")
         image?.isTemplate = true
@@ -60,7 +63,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(action("Setup…", showSetup))
         menu.addItem(.separator())
 
-        if let offer = updateOffer() {
+        if isUpdating() {
+            let item = NSMenuItem(title: "Updating…", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        } else if let offer = updateOffer() {
             menu.addItem(action("Update to \(offer.version)…") { [weak self] in self?.installUpdate(offer) })
         } else {
             menu.addItem(action("Check for Updates…", checkForUpdates))

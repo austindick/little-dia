@@ -47,16 +47,47 @@ private func release(tag: String, assets: [String] = ["Little-Dia.zip"]) throws 
 }
 
 @Test func refusesToReplaceOutsideAWritableFolder() throws {   // Review Focus 1
-    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ld-upd-\(UUID().uuidString)")
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("ld-upd-\(UUID().uuidString)")
+    let folder = root.appendingPathComponent("Applications")
     let app = folder.appendingPathComponent("X.app")
     try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
     defer {
         chmod(folder.path, 0o755)
-        try? FileManager.default.removeItem(at: folder)
+        try? FileManager.default.removeItem(at: root)
     }
     #expect(UpdateInstall.canReplace(appAt: app))
     #expect(!UpdateInstall.canReplace(appAt: folder))                                  // not an .app
     #expect(!UpdateInstall.canReplace(appAt: folder.appendingPathComponent("Y.app")))  // missing
     chmod(folder.path, 0o555)
     #expect(!UpdateInstall.canReplace(appAt: app))                                     // read-only parent
+}
+
+/// Review finding 1: a build run from the repo (build/Little Dia.app) must never be replaced by an update.
+@Test func replacesOnlyAnAppInAnApplicationsFolder() throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ld-upd-\(UUID().uuidString)")
+    let installed = folder.appendingPathComponent("Applications/Little Dia.app")
+    let built = folder.appendingPathComponent("build/Little Dia.app")
+    try FileManager.default.createDirectory(at: installed, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: built, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    #expect(UpdateInstall.canReplace(appAt: installed))
+    #expect(!UpdateInstall.canReplace(appAt: built))
+}
+
+/// Review finding 4: relaunching must wait for the old process to exit; `open` on a still-running app just activates it.
+@Test func relaunchWaitsForTheOldProcessToExit() throws {
+    let marker = FileManager.default.temporaryDirectory.appendingPathComponent("ld-relaunch-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: marker) }
+    let oldApp = Process()
+    oldApp.executableURL = URL(fileURLWithPath: "/bin/sleep")
+    oldApp.arguments = ["0.5"]
+    try oldApp.run()
+    let started = Date()
+    let relaunch = Process()
+    relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
+    relaunch.arguments = UpdateInstall.relaunchArguments(appPath: marker.path, waitingFor: oldApp.processIdentifier, opener: "/usr/bin/touch")
+    try relaunch.run()
+    relaunch.waitUntilExit()
+    #expect(Date().timeIntervalSince(started) >= 0.4)
+    #expect(FileManager.default.fileExists(atPath: marker.path))
 }

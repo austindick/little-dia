@@ -49,7 +49,12 @@ install_app() {
 
 uninstall_app() {
   quit_running_app
-  [[ -d "$APP" && -z "${LITTLEDIA_NO_OPEN:-}" ]] && "$LSREGISTER" -u "$APP" || true
+  if [[ -z "${LITTLEDIA_NO_OPEN:-}" ]]; then   # (skipped in tests, which must not touch this Mac's settings)
+    defaults delete com.austindick.littledia >/dev/null 2>&1 || true
+    # Reset while the app is still installed, so macOS can find it by its ID.
+    tccutil reset Accessibility com.austindick.littledia >/dev/null 2>&1 || true
+    [[ -d "$APP" ]] && "$LSREGISTER" -u "$APP" || true
+  fi
   rm -rf "$APP" "$APP_SUPPORT/Little Dia"
   rm -f "$APP_SUPPORT/Dia/NativeMessagingHosts/com.austindick.littledia.bridge.json" \
         "$APP_SUPPORT/Dia/User Data/NativeMessagingHosts/com.austindick.littledia.bridge.json"

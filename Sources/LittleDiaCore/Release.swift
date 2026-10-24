@@ -58,10 +58,19 @@ public struct UpdateOffer: Equatable, Sendable {
 }
 
 public enum UpdateInstall {
-    /// Whether an update may replace the app at `bundleURL`: it must be an installed .app whose folder we can write
-    /// to. A build run from elsewhere, or a read-only location, is left alone.
+    /// Whether an update may replace the app at `bundleURL`: it must be an .app installed in an Applications folder
+    /// (~/Applications or /Applications) that we can write to. A build run from the repo, a copy macOS is running from
+    /// a temporary location, or a read-only folder is left alone.
     public static func canReplace(appAt bundleURL: URL, fileManager: FileManager = .default) -> Bool {
-        guard bundleURL.pathExtension == "app", fileManager.fileExists(atPath: bundleURL.path) else { return false }
-        return fileManager.isWritableFile(atPath: bundleURL.deletingLastPathComponent().path)
+        let folder = bundleURL.deletingLastPathComponent()
+        guard bundleURL.pathExtension == "app", folder.lastPathComponent == "Applications",
+              fileManager.fileExists(atPath: bundleURL.path) else { return false }
+        return fileManager.isWritableFile(atPath: folder.path)
+    }
+
+    /// `/bin/sh` arguments that wait for process `pid` (the app being replaced) to exit, then run `opener` on
+    /// `appPath`. Opening while the old copy is still running would only bring the old copy forward.
+    public static func relaunchArguments(appPath: String, waitingFor pid: pid_t, opener: String = "/usr/bin/open") -> [String] {
+        ["-c", #"while kill -0 "$1" 2>/dev/null; do sleep 0.1; done; exec "$2" "$0""#, appPath, String(pid), opener]
     }
 }

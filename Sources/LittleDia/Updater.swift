@@ -56,6 +56,7 @@ final class Updater {
     }
 
     func check(userInitiated: Bool) async {
+        if state == .installing || state == .checking { return }
         state = .checking
         do {
             var request = URLRequest(url: ReleaseSource.latestReleaseURL)
@@ -91,9 +92,10 @@ final class Updater {
     }
 
     func install(_ offer: UpdateOffer) async {
+        guard state != .installing else { return }   // a second click while the first update downloads
         let bundleURL = Bundle.main.bundleURL
         guard UpdateInstall.canReplace(appAt: bundleURL) else {
-            fail("Little Dia isn't in a folder it can update (\(bundleURL.deletingLastPathComponent().path)).")
+            fail("Couldn't update: Little Dia can only update itself in your Applications folder. Move it there, then try again.")
             return
         }
         state = .installing
@@ -111,16 +113,21 @@ final class Updater {
             guard FileManager.default.fileExists(atPath: newApp.path) else { throw UpdateError("the download didn't contain \(bundleURL.lastPathComponent)") }
             try Self.verifySignedLikeThisApp(newApp)
             try Self.replace(bundleURL, with: newApp)
-            logger.notice("installed \(offer.version, privacy: .public); relaunching")
-            // Relaunch from a shell that outlives this process.
-            let relaunch = Process()
-            relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
-            relaunch.arguments = ["-c", #"sleep 1; open "$0""#, bundleURL.path]
-            try relaunch.run()
-            NSApp.terminate(nil)
         } catch {
             fail("Couldn't update: \(Self.describe(error))")
+            return
         }
+        logger.notice("installed \(offer.version, privacy: .public); relaunching")
+        // Relaunch from a shell that outlives this process and waits for it to exit first.
+        let relaunch = Process()
+        relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
+        relaunch.arguments = UpdateInstall.relaunchArguments(appPath: bundleURL.path, waitingFor: getpid())
+        do {
+            try relaunch.run()
+        } catch {
+            alert("Little Dia \(offer.version) is installed. Quit Little Dia and open it again to finish.")
+        }
+        NSApp.terminate(nil)
     }
 
     private func fail(_ message: String) {
