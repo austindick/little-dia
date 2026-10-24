@@ -19,7 +19,7 @@ final class TitleBarOverlay {
     private let onMove: (Int) -> Void
     private let onSendToProfile: (Int, String) -> Void
     private var copyButton: PillButton!
-    private var otherProfiles: [String] = []
+    private var profiles: BrowserProfiles?
     private var current: TrackedWindow?
     private var copiedReset: DispatchWorkItem?
 
@@ -50,7 +50,7 @@ final class TitleBarOverlay {
 
     /// Rebuilds the buttons for the browser's profiles (nil: unknown, a plain Move button labeled with the browser).
     func setProfiles(_ profiles: BrowserProfiles?) {
-        otherProfiles = profiles?.others ?? []
+        self.profiles = profiles
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
@@ -61,8 +61,8 @@ final class TitleBarOverlay {
 
         let nest = Self.windowCornerRadius - Self.inset
         let destination = profiles?.current ?? browserName
-        let split = !otherProfiles.isEmpty
-        let move = PillButton(title: destination, symbol: "arrow.up.forward.app", label: "Move to \(destination)",
+        let split = !(profiles?.others.isEmpty ?? true)
+        let move = PillButton(title: "Open in \(destination)", symbol: "arrow.up.forward.app", label: "Open in \(destination)",
                               corners: split ? .init(topLeft: 6, topRight: 0, bottomRight: 0, bottomLeft: 6)
                                              : .init(topLeft: 6, topRight: nest, bottomRight: 6, bottomLeft: 6))
         move.toolTip = "Move this page to the main \(browserName) window"
@@ -71,9 +71,9 @@ final class TitleBarOverlay {
         stack.addArrangedSubview(move)
 
         if split {
-            let chevron = PillButton(title: nil, symbol: "chevron.down", label: "Send to another profile", width: 20,
+            let chevron = PillButton(title: nil, symbol: "chevron.down", label: "Open in another profile", width: 26,
                                      corners: .init(topLeft: 0, topRight: nest, bottomRight: 6, bottomLeft: 0))
-            chevron.toolTip = "Send this page to another profile"
+            chevron.toolTip = "Open this page in another profile"
             chevron.target = self
             chevron.action = #selector(chevronClicked(_:))
             stack.setCustomSpacing(1, after: move)
@@ -127,10 +127,13 @@ final class TitleBarOverlay {
     }
 
     @objc private func chevronClicked(_ sender: NSButton) {
-        guard let id = current?.windowId else { return }
+        guard let id = current?.windowId, let profiles else { return }
         let menu = NSMenu()
-        for profile in otherProfiles {
-            let item = MenuAction(title: "Send to \(profile)") { [weak self] in self?.onSendToProfile(id, profile) }
+        for profile in profiles.all {
+            // The little window's own profile gets the live move; the others reopen the page there.
+            let item = MenuAction(title: profile) { [weak self] in
+                if profile == profiles.current { self?.onMove(id) } else { self?.onSendToProfile(id, profile) }
+            }
             menu.addItem(item)
         }
         let below = NSPoint(x: 0, y: sender.isFlipped ? sender.bounds.maxY + 4 : -4)

@@ -38,3 +38,7 @@ private func makeUserData(profiles: [String: String], extensionIn: String?) thro
     #expect(script.contains(#"profile "My \"Work\"""#))
     #expect(script.contains("tell application id \"company.thebrowser.dia\""))
 }
+
+@Test func allProfilesAreListedAlphabeticallyIncludingTheCurrentOne() {
+    #expect(BrowserProfiles(current: "Work", others: ["Personal", "Side"]).all == ["Personal", "Side", "Work"])
+}

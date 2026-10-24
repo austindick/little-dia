@@ -11,6 +11,9 @@ public struct BrowserProfiles: Equatable, Sendable {
         self.others = others
     }
 
+    /// Every profile, alphabetically, for the profile menu.
+    public var all: [String] { (others + [current]).sorted() }
+
     /// Reads profile names from Chromium's `Local State`, and finds the extension's profile by its ID in each
     /// profile's preferences.
     public static func load(userDataDirectory: URL, extensionID: String = ExtensionIdentity.chromiumID) -> BrowserProfiles? {

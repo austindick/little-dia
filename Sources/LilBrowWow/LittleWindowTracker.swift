@@ -20,6 +20,8 @@ final class LittleWindowTracker {
         var windowNumber: CGWindowID?
         /// Height of the page area (the window minus the browser's title bar and address row).
         var pageHeight: CGFloat
+        /// The window has finished animating open; until then its buttons stay hidden so they don't jump around.
+        var settled = false
     }
 
     private let onChange: (TrackedWindow?) -> Void
@@ -83,13 +85,14 @@ final class LittleWindowTracker {
                     }
                 }
                 logger.notice("tracking little window \(windowId) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
-                recompute()
-                // The window is still animating open and the browser is still taking focus: look again shortly.
+                // The window is still animating open and the browser is still taking focus: show the buttons once
+                // its frame has stopped changing (two identical readings in a row), then check again a moment later.
                 Task { @MainActor [weak self] in
-                    for delay in [150, 400, 800] as [Int] {
-                        try? await Task.sleep(for: .milliseconds(delay))
-                        self?.recompute()
-                    }
+                    await self?.waitUntilSettled(windowId)
+                    self?.entries[windowId]?.settled = true
+                    self?.recompute()
+                    try? await Task.sleep(for: .milliseconds(400))
+                    self?.recompute()
                 }
                 return true
             }
@@ -97,6 +100,19 @@ final class LittleWindowTracker {
         }
         logger.error("could not find little window \(windowId) through Accessibility")
         return false
+    }
+
+    private func waitUntilSettled(_ windowId: Int) async {
+        var last: CGRect?
+        for _ in 0..<40 {   // at most ~1.2s
+            guard let entry = entries[windowId] else { return }
+            let number = entry.windowNumber ?? browserPID.flatMap { onThisDesktop(entry.frame, pid: $0) }
+            if let number { entries[windowId]?.windowNumber = number }
+            let frame = number.flatMap { serverInfo(of: $0)?.frame }
+            if let frame, frame == last { return }
+            last = frame
+            try? await Task.sleep(for: .milliseconds(30))
+        }
     }
 
     func untrack(windowId: Int) {
@@ -161,7 +177,7 @@ final class LittleWindowTracker {
             let focusedID = focusedWindow(of: pid).flatMap { focused in entries.first { CFEqual($0.value.element, focused) }?.key }
             if let id = OverlayVisibility.windowToShow(frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
                                                        browserPID: pid, focusedWindow: focusedID, tracked: Set(entries.keys)),
-               let entry = entries[id],
+               let entry = entries[id], entry.settled,
                let number = entry.windowNumber ?? onThisDesktop(frame(of: entry.element) ?? entry.frame, pid: pid),
                let server = serverInfo(of: number), server.onScreen {
                 // The window server's frame is live; Accessibility's can be stale mid-drag.
