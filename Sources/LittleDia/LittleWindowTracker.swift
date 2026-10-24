@@ -56,7 +56,7 @@ final class LittleWindowTracker {
             MainActor.assumeIsolated {
                 guard let self, pid == self.browserPID else { return }
                 self.entries.removeAll()
-                self.observer = nil
+                self.stopObserving()
                 self.browserPID = nil
                 self.recompute()
             }
@@ -142,6 +142,7 @@ final class LittleWindowTracker {
 
     private func startObserving(_ pid: pid_t) {
         entries.removeAll()
+        stopObserving()
         browserPID = pid
         var created: AXObserver?
         let callback: AXObserverCallback = { _, element, notification, refcon in
@@ -160,7 +161,15 @@ final class LittleWindowTracker {
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(created), .defaultMode)
     }
 
-    private func handle(_ notification: String, element: AXUIElement) {
+    /// Takes the observer off the main run loop; dropping the reference alone would leave its source registered.
+    private func stopObserving() {
+        guard let observer else { return }
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
+        self.observer = nil
+        logger.notice("stopped observing browser \(self.browserPID ?? 0)")
+    }
+
+        private func handle(_ notification: String, element: AXUIElement) {
         switch notification {
         case kAXUIElementDestroyedNotification:
             if let id = entries.first(where: { CFEqual($0.value.element, element) })?.key { untrack(windowId: id) }

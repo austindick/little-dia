@@ -155,8 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             moveToMain.handle(message)
         case let .log(text):
             logger.notice("extension: \(text, privacy: .public)")
-        case let .copy(url):
-            writeToPasteboard(url)
         default:
             break
         }
@@ -234,19 +232,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .littleURL(windowId, _): return "littleURL window=\(windowId)"
         case let .openFailed(requestId, error): return "openFailed request=\(requestId) \(error)"
         case let .hello(version): return "hello \(version)"
-        case .copy: return "copy"
         case .log: return "log"
         case .hostHello: return "hostHello"
         }
     }
 
 
-    /// The screen the pointer is on, so the little window opens where the user is looking.
-    private static func currentScreen() -> ScreenContext {
+    /// The screen the pointer is on, so the little window opens where the user is looking. Nil with no display.
+    private static func currentScreen() -> ScreenContext? {
         let mouse = NSEvent.mouseLocation
         let screens = NSScreen.screens
-        let screen = screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? screens[0]
-        return ScreenContext(visibleFrame: screen.visibleFrame, primaryScreenHeight: screens[0].frame.height)
+        guard let primary = screens.first,
+              let screen = screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main ?? screens.first else { return nil }
+        return ScreenContext(visibleFrame: screen.visibleFrame, primaryScreenHeight: primary.frame.height)
     }
 
     private static var helperPath: String {

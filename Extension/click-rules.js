@@ -17,8 +17,10 @@
     }
     if (protocol !== "http:" && protocol !== "https:") return "default";
     if (anchor.hasDownload || evt.altKey) return "default";
+    // Middle-click always opens a tab; modifiers and target=_blank only count on a plain left click.
     const opensNewTab =
-      evt.button === 1 || evt.metaKey || evt.shiftKey || (evt.button === 0 && (anchor.target || "").toLowerCase() === "_blank");
+      evt.button === 1 ||
+      (evt.button === 0 && (evt.metaKey || evt.shiftKey || (anchor.target || "").toLowerCase() === "_blank"));
     return opensNewTab ? "little" : "default";
   }
 

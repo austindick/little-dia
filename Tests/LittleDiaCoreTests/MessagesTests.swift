@@ -50,3 +50,7 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     let m = InboundMessage.hostHello(browserBundleID: "company.thebrowser.dia", browserPID: 1234)
     #expect(try MessageCoding.decodeInbound(try MessageCoding.encode(m)) == m)
 }
+
+@Test func rejectsCopyMessage() {   // the extension never sends it; Copy reads the URL the app already tracks
+    #expect(throws: (any Error).self) { try MessageCoding.decodeInbound(Data(#"{"type":"copy","url":"https://a.b/"}"#.utf8)) }
+}

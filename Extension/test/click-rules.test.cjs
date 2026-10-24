@@ -16,6 +16,9 @@ const cases = [
   [{ button: 0, altKey: true }, { ...base, target: "_blank" }, "default"],
   [{ button: 0 }, { ...base, target: "results-frame" }, "default"],
   [{ button: 0, isTrusted: false }, { ...base, target: "_blank" }, "default"],   // a page script's fake click
+  [{ button: 2, metaKey: true }, base, "default"],   // a right-click with ⌘ held is not a new-tab click
+  [{ button: 2, shiftKey: true }, base, "default"],
+  [{ button: 1, shiftKey: true }, base, "little"],
 ];
 
 for (const [evt, anchor, expected] of cases) {

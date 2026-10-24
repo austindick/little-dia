@@ -36,7 +36,6 @@ public enum InboundMessage: Equatable, Sendable {
     case littleClosed(windowId: Int)
     /// Sent just before a little window is closed because its page moved to the main window.
     case littleMoved(windowId: Int)
-    case copy(url: String)
     /// A diagnostic line from the extension (its own console isn't reachable in Dia).
     case log(message: String)
 }
@@ -127,8 +126,6 @@ extension InboundMessage: Codable {
             self = .littleClosed(windowId: try c.decode(Int.self, forKey: .windowId))
         case "littleMoved":
             self = .littleMoved(windowId: try c.decode(Int.self, forKey: .windowId))
-        case "copy":
-            self = .copy(url: try c.decode(String.self, forKey: .url))
         case "log":
             self = .log(message: try c.decode(String.self, forKey: .message))
         case let other:
@@ -170,9 +167,6 @@ extension InboundMessage: Codable {
         case let .littleMoved(windowId):
             try c.encode("littleMoved", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
-        case let .copy(url):
-            try c.encode("copy", forKey: .type)
-            try c.encode(url, forKey: .url)
         case let .log(message):
             try c.encode("log", forKey: .type)
             try c.encode(message, forKey: .message)

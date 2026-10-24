@@ -38,6 +38,8 @@ public enum FallbackReason: Equatable, Sendable {
     /// The browser wasn't open: links open in its main window until it is (owner decision, 2026-10-23).
     case notRunning
     case disabled, notWebURL, notReady, openFailed, timedOut, notVisible
+    /// No display to put a little window on.
+    case noScreen
 }
 
 public enum RouteOutcome: Equatable, Sendable {
@@ -54,14 +56,14 @@ public final class LinkRouter {
     private let settings: LittleSettings
     private let link: ExtensionLink
     private let browser: BrowserControl
-    private let screen: () -> ScreenContext
+    private let screen: () -> ScreenContext?
     private let timeouts: RouterTimeouts
     private let makeRequestID: () -> String
     /// Called with a popup the router gave up on (it never reached the screen in time), so it can be closed natively.
     public var onAbandon: ((Int) -> Void)?
     private let logger = Logger(subsystem: "com.austindick.littledia", category: "router")
 
-    public init(settings: LittleSettings, link: ExtensionLink, browser: BrowserControl, screen: @escaping () -> ScreenContext,
+    public init(settings: LittleSettings, link: ExtensionLink, browser: BrowserControl, screen: @escaping () -> ScreenContext?,
                 timeouts: RouterTimeouts = .init(), makeRequestID: @escaping () -> String = { UUID().uuidString }) {
         self.settings = settings
         self.link = link
@@ -88,8 +90,9 @@ public final class LinkRouter {
             guard await link.waitUntilReady(browser: bundleID, timeout: timeouts.runningToReady) else { return fallback(.notReady) }
         }
 
+        guard let screenContext = screen() else { return fallback(.noScreen) }
         let windowsBefore = browser.onScreenWindows(bundleID: bundleID)
-        var bounds = ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: screen(),
+        var bounds = ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: screenContext,
                                                        chromeHeight: settings.browser.chromeHeight)
         // Don't stack exactly on top of an existing little window: it would hide it and confuse window matching.
         for _ in 0..<10 where matchLittleWindow(windowsBefore, bounds: bounds, excluding: []) != nil {

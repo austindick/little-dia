@@ -191,3 +191,13 @@ private var abandoned: [Int] = []
     _ = await router.route(github)
     #expect(link.openCalls.first?.bounds == Bounds(left: 330, top: 203, width: 1000, height: 750))
 }
+
+@MainActor @Test func noScreenOpensNormally() async {   // e.g. a laptop closed with no display attached
+    let settings = FakeSettings(), link = FakeLink(), browser = FakeBrowser()
+    link.screen = browser
+    let router = LinkRouter(settings: settings, link: link, browser: browser, screen: { nil },
+                            timeouts: fast, makeRequestID: { "r1" })
+    #expect(await router.route(github) == .openedNormally(.noScreen))
+    #expect(link.openCalls.isEmpty)
+    #expect(browser.openNormallyCalls == [github])
+}
