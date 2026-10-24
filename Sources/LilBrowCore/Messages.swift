@@ -24,17 +24,19 @@ public enum OutboundMessage: Equatable, Sendable {
 }
 
 /// Messages the app receives on the bridge socket: the helper's `hostHello`, then everything the extension sends.
+/// URLs are kept exactly as the browser wrote them (not parsed into `URL`, which re-encodes characters like `|` and
+/// `[ ]`), so Copy puts the browser's own URL on the clipboard.
 public enum InboundMessage: Equatable, Sendable {
     case hostHello(browserBundleID: String, browserPID: Int32)
     case hello(extensionVersion: String)
-    case opened(requestId: String?, windowId: Int, url: URL, bounds: Bounds)
+    case opened(requestId: String?, windowId: Int, url: String, bounds: Bounds)
     case openFailed(requestId: String, error: String)
-    case littleURL(windowId: Int, url: URL)
+    case littleURL(windowId: Int, url: String)
     case littleBounds(windowId: Int, bounds: Bounds)
     case littleClosed(windowId: Int)
     /// Sent just before a little window is closed because its page moved to the main window.
     case littleMoved(windowId: Int)
-    case copy(url: URL)
+    case copy(url: String)
     /// A diagnostic line from the extension (its own console isn't reachable in Dia).
     case log(message: String)
 }
@@ -113,12 +115,12 @@ extension InboundMessage: Codable {
             self = .hello(extensionVersion: try c.decode(String.self, forKey: .extensionVersion))
         case "opened":
             self = .opened(requestId: try c.decodeIfPresent(String.self, forKey: .requestId),
-                           windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decodeURL(.url),
+                           windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decode(String.self, forKey: .url),
                            bounds: try c.decode(Bounds.self, forKey: .bounds))
         case "openFailed":
             self = .openFailed(requestId: try c.decode(String.self, forKey: .requestId), error: try c.decode(String.self, forKey: .error))
         case "littleURL":
-            self = .littleURL(windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decodeURL(.url))
+            self = .littleURL(windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decode(String.self, forKey: .url))
         case "littleBounds":
             self = .littleBounds(windowId: try c.decode(Int.self, forKey: .windowId), bounds: try c.decode(Bounds.self, forKey: .bounds))
         case "littleClosed":
@@ -126,7 +128,7 @@ extension InboundMessage: Codable {
         case "littleMoved":
             self = .littleMoved(windowId: try c.decode(Int.self, forKey: .windowId))
         case "copy":
-            self = .copy(url: try c.decodeURL(.url))
+            self = .copy(url: try c.decode(String.self, forKey: .url))
         case "log":
             self = .log(message: try c.decode(String.self, forKey: .message))
         case let other:
@@ -148,7 +150,7 @@ extension InboundMessage: Codable {
             try c.encode("opened", forKey: .type)
             try c.encodeIfPresent(requestId, forKey: .requestId)
             try c.encode(windowId, forKey: .windowId)
-            try c.encode(url.absoluteString, forKey: .url)
+            try c.encode(url, forKey: .url)
             try c.encode(bounds, forKey: .bounds)
         case let .openFailed(requestId, error):
             try c.encode("openFailed", forKey: .type)
@@ -157,7 +159,7 @@ extension InboundMessage: Codable {
         case let .littleURL(windowId, url):
             try c.encode("littleURL", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
-            try c.encode(url.absoluteString, forKey: .url)
+            try c.encode(url, forKey: .url)
         case let .littleBounds(windowId, bounds):
             try c.encode("littleBounds", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
@@ -170,7 +172,7 @@ extension InboundMessage: Codable {
             try c.encode(windowId, forKey: .windowId)
         case let .copy(url):
             try c.encode("copy", forKey: .type)
-            try c.encode(url.absoluteString, forKey: .url)
+            try c.encode(url, forKey: .url)
         case let .log(message):
             try c.encode("log", forKey: .type)
             try c.encode(message, forKey: .message)

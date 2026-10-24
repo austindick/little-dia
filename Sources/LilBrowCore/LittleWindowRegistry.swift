@@ -3,10 +3,11 @@ import Foundation
 public struct LittleWindowInfo: Equatable, Sendable {
     public var windowId: Int
     public var browserBundleID: String
-    public var url: URL
+    /// Exactly as the browser reports it.
+    public var url: String
     public var bounds: Bounds
 
-    public init(windowId: Int, browserBundleID: String, url: URL, bounds: Bounds) {
+    public init(windowId: Int, browserBundleID: String, url: String, bounds: Bounds) {
         self.windowId = windowId
         self.browserBundleID = browserBundleID
         self.url = url

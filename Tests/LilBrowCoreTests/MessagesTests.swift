@@ -19,7 +19,13 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
 
 @Test func decodesOpenedWithoutRequestId() throws {
     let json = #"{"type":"opened","windowId":42,"url":"https://github.com/pulls","bounds":{"left":300,"top":137,"width":1000,"height":750}}"#
-    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .opened(requestId: nil, windowId: 42, url: URL(string: "https://github.com/pulls")!, bounds: b))
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .opened(requestId: nil, windowId: 42, url: "https://github.com/pulls", bounds: b))
+}
+
+@Test func keepsURLsExactlyAsTheBrowserSentThem() throws {   // review #10: Copy must not re-encode | [ ] or %zz
+    let raw = "https://grafana.example.com/d/x?var-env=a|b&filter[status]=open&q=%zz"
+    let json = #"{"type":"littleURL","windowId":7,"url":"\#(raw)"}"#
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .littleURL(windowId: 7, url: raw))
 }
 
 @Test func decodesLittleMoved() throws {
@@ -36,10 +42,8 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
 
 @Test func realWorldURLSurvivesRoundTrip() throws {   // Review Focus 3
     let s = "https://docs.google.com/document/d/1AbC_xyz/edit?usp=sharing&q=caf%C3%A9%20au%20lait#heading=h.2x"
-    let m = InboundMessage.littleURL(windowId: 7, url: URL(string: s)!)
-    let back = try MessageCoding.decodeInbound(try MessageCoding.encode(m))
-    guard case .littleURL(_, let url) = back else { Issue.record("wrong case"); return }
-    #expect(url.absoluteString == s)
+    let m = InboundMessage.littleURL(windowId: 7, url: s)
+    #expect(try MessageCoding.decodeInbound(try MessageCoding.encode(m)) == m)
 }
 
 @Test func hostHelloRoundTrips() throws {

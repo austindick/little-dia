@@ -108,7 +108,7 @@ private final class TestClient: @unchecked Sendable {
     async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true), browser: browser, timeout: .seconds(2))
     let received = try await client.readOutbound()
     #expect(received == .open(requestId: "r1", url: github, bounds: someBounds, focused: true))
-    try client.send(.opened(requestId: "r1", windowId: 42, url: github, bounds: someBounds))
+    try client.send(.opened(requestId: "r1", windowId: 42, url: github.absoluteString, bounds: someBounds))
     #expect(await result == .opened(windowId: 42))
 }
 

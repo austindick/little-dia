@@ -143,9 +143,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         writeToPasteboard(url)
     }
 
-    private func writeToPasteboard(_ url: URL) {
+    private func writeToPasteboard(_ url: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        NSPasteboard.general.setString(url, forType: .string)
         if overlay.isVisible { overlay.flashCopied() }
     }
 

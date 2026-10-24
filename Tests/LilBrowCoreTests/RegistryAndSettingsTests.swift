@@ -5,7 +5,7 @@ import Testing
 
 @Test func registryTracksURLChanges() {
     let registry = LittleWindowRegistry()
-    let first = URL(string: "https://github.com/")!, second = URL(string: "https://github.com/pulls")!
+    let first = "https://github.com/", second = "https://github.com/pulls"
     let bounds = Bounds(left: 300, top: 137, width: 1000, height: 750)
     registry.apply(.opened(requestId: "r1", windowId: 42, url: first, bounds: bounds), from: "company.thebrowser.dia")
     #expect(registry.info(for: 42) == LittleWindowInfo(windowId: 42, browserBundleID: "company.thebrowser.dia", url: first, bounds: bounds))
