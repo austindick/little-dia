@@ -32,8 +32,10 @@ final class TitleBarOverlay {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.isFloatingPanel = true
+        // Disappear instantly when hidden (drag/resize); the fade-in on show is done by hand.
+        panel.animationBehavior = .none
 
-        copyButton = PillButton(title: nil, symbol: "link", label: "Copy link")
+        copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
         moveButton = PillButton(title: browserName, symbol: "arrow.up.forward.app", label: "Open in \(browserName)")
         copyButton.toolTip = "Copy this page's URL"
         moveButton.toolTip = "Move this page to the main \(browserName) window"
@@ -72,6 +74,7 @@ final class TitleBarOverlay {
 
     func hide() {
         current = nil
+        panel.alphaValue = 0   // stops a fade-in that may still be running
         panel.orderOut(nil)
     }
 
@@ -95,15 +98,16 @@ final class TitleBarOverlay {
     }
 }
 
-/// A small borderless button with a soft, semi-transparent rounded fill that darkens on hover and press.
-/// The fill is drawn here rather than set on the button's layer: AppKit manages the layer of image-only buttons
-/// itself and drops its corner radius.
+/// A small borderless button, optionally with a soft, semi-transparent rounded fill that darkens on hover and press.
+/// The fill is drawn here rather than set on the button's layer, which AppKit manages itself.
 private final class PillButton: NSButton {
     static let height: CGFloat = 22
     static let cornerRadius: CGFloat = 6
+    private let filled: Bool
     private var hovering = false { didSet { needsDisplay = true } }
 
-    init(title: String?, symbol: String, label: String) {
+    init(title: String?, symbol: String, label: String, filled: Bool = true) {
+        self.filled = filled
         super.init(frame: .zero)
         self.title = title ?? ""
         isBordered = false
@@ -134,9 +138,11 @@ private final class PillButton: NSButton {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
-        NSColor.labelColor.withAlphaComponent(alpha).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
+        if filled {
+            let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
+            NSColor.labelColor.withAlphaComponent(alpha).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
+        }
         super.draw(dirtyRect)
     }
 
