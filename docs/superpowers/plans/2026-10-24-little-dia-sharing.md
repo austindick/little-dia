@@ -1121,3 +1121,37 @@ This is the owner's call: create a test macOS user and run the one-liner there, 
 - [ ] **Step 8: Hand off**
 
 Tell the owner it's ready to send to one coworker first, and give them the one-line command to paste.
+
+---
+
+### Task 16: Keep long page titles from running under the buttons (added 2026-10-24, owner-reported)
+
+Dia draws the page title across the whole title bar, so a long title runs under the Copy and Open in {profile} buttons. The owner sent a screenshot; the title was "…wn there and folding standalone Design with Cla…".
+
+**Files:**
+- Modify: `Sources/LittleDia/TitleBarOverlay.swift`
+- Possibly: `Sources/LittleDiaCore/ScreenGeometry.swift`, if the backdrop needs its own frame helper. That helper gets a unit test.
+
+**Behavior:**
+- A backdrop sits behind the button group. It's an `NSVisualEffectView` (material `.titlebar`, blending `.behindWindow`, state `.active`), so the title shows through blurred and the color follows Dia's title bar in both light and dark mode.
+- It extends about 40pt left of the buttons, with a horizontal gradient mask from clear to opaque. Long titles fade out before the buttons instead of colliding with them.
+- It shows, hides and fades exactly with the buttons: it hides instantly on drag or resize and fades back in.
+- **The fade strip must not swallow clicks or drags on Dia's title bar.** The backdrop lives in its own panel with `ignoresMouseEvents = true`, ordered just below the buttons panel.
+
+- [ ] **Step 1: Implement the backdrop panel and its fade mask**
+- [ ] **Step 2: Build, install, owner checks**
+
+Run: `LITTLEDIA_SIGN_IDENTITY="Little Dia" scripts/build-app.sh --install`
+
+Expected:
+- A page with a long title fades out before the buttons, in light and dark mode.
+- A short title looks unchanged.
+- Dragging the window by the faded strip still moves it.
+- The buttons still hide during drags and fade back in.
+- No shift when the window opens.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add -A && git commit -m "fix: fade long page titles out behind the title-bar buttons"
+```
