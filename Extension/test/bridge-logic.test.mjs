@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -63,4 +63,17 @@ test("serial keeps going after a failed update", async () => {
   const serial = makeSerial();
   await assert.rejects(serial(async () => { throw new Error("boom"); }));
   assert.equal(await serial(async () => "ok"), "ok");
+});
+
+test("nextReconnectDelay starts at one second", () => {
+  assert.equal(nextReconnectDelay(0, 0), 1000);
+});
+
+test("nextReconnectDelay doubles while the helper keeps dropping quickly, up to a minute", () => {
+  assert.equal(nextReconnectDelay(1000, 500), 2000);
+  assert.equal(nextReconnectDelay(60000, 0), 60000);
+});
+
+test("nextReconnectDelay resets after a connection that lasted", () => {
+  assert.equal(nextReconnectDelay(8000, 45000), 1000);
 });

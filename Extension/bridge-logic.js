@@ -52,3 +52,12 @@ export function makeSerial() {
     return run;
   };
 }
+
+/**
+ * How long to wait before reconnecting after the native helper went away. The helper exits after an update so the
+ * browser can start the new one; reconnect quickly then, but back off (up to a minute) if it keeps dropping at once.
+ */
+export function nextReconnectDelay(previousDelayMs, connectedForMs) {
+  if (connectedForMs >= 30000) return 1000;
+  return Math.min(Math.max(previousDelayMs * 2, 1000), 60000);
+}

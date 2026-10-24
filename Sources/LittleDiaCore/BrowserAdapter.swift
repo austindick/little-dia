@@ -11,21 +11,26 @@ public struct BrowserAdapter: Equatable, Sendable {
     public let chromeHeight: CGFloat
     /// The browser's user-data folder (profiles), relative to ~/Library/Application Support.
     public let userDataDirectory: String?
+    /// Code-signing requirement the browser's running process must meet before its helper may connect.
+    public let codeRequirement: String?
 
     public init(name: String, bundleID: String, nativeHostDirectories: [String], chromeHeight: CGFloat = 0,
-                userDataDirectory: String? = nil) {
+                userDataDirectory: String? = nil, codeRequirement: String? = nil) {
         self.name = name
         self.bundleID = bundleID
         self.nativeHostDirectories = nativeHostDirectories
         self.chromeHeight = chromeHeight
         self.userDataDirectory = userDataDirectory
+        self.codeRequirement = codeRequirement
     }
 
     /// Dia's folder is reported as both of these; installing to both settles which one it reads.
     public static let dia = BrowserAdapter(name: "Dia", bundleID: "company.thebrowser.dia",
                                            nativeHostDirectories: ["Dia/NativeMessagingHosts", "Dia/User Data/NativeMessagingHosts"],
                                            chromeHeight: 72,   // measured 2026-10-23
-                                           userDataDirectory: "Dia/User Data")
+                                           userDataDirectory: "Dia/User Data",
+                                           // Dia's own designated requirement, narrowed to The Browser Company's team.
+                                           codeRequirement: #"anchor apple generic and identifier "company.thebrowser.dia" and certificate leaf[subject.OU] = "S6N382Y83G""#)
     public static let chrome = BrowserAdapter(name: "Chrome", bundleID: "com.google.Chrome",
                                               nativeHostDirectories: ["Google/Chrome/NativeMessagingHosts"])
     public static let all: [BrowserAdapter] = [.dia, .chrome]

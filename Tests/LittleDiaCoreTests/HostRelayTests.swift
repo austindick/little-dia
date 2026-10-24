@@ -5,12 +5,13 @@ import Testing
 private let hostHello = InboundMessage.hostHello(browserBundleID: "test.browser", browserPID: 1)
 
 /// Starts a listener and a relay on a background thread; `finished` is signalled when `run()` returns.
-private func startRelay() throws -> (listenFD: Int32, input: Pipe, output: Pipe, finished: DispatchSemaphore) {
+private func startRelay(shouldGiveUp: @escaping @Sendable () -> Bool = { false }) throws
+    -> (listenFD: Int32, input: Pipe, output: Pipe, finished: DispatchSemaphore) {
     let path = makeSocketPath()
     let listenFD = try UnixSocket.listen(path: path)
     let input = Pipe(), output = Pipe()
     let relay = HostRelay(input: input.fileHandleForReading, output: output.fileHandleForWriting,
-                          socketPath: path, hello: hostHello, retryInterval: 0.1)
+                          socketPath: path, hello: hostHello, retryInterval: 0.1, shouldGiveUp: shouldGiveUp)
     let finished = DispatchSemaphore(value: 0)
     Thread { relay.run(); finished.signal() }.start()
     return (listenFD, input, output, finished)
@@ -55,4 +56,29 @@ private func startRelay() throws -> (listenFD: Int32, input: Pipe, output: Pipe,
     _ = try acceptConnection(r.listenFD)
     try r.input.fileHandleForWriting.close()
     #expect(r.finished.wait(timeout: .now() + 1) == .success)
+}
+
+/// After an update the helper's own file is replaced; the new app can't vouch for the old process, so it must exit
+/// and let the browser start the new one.
+@Test func givesUpAfterServerDropsWhenToldTo() throws {
+    let r = try startRelay(shouldGiveUp: { true })
+    let first = try acceptConnection(r.listenFD)
+    _ = try FrameReader(fd: first).next()
+    close(first)
+    #expect(r.finished.wait(timeout: .now() + 1) == .success)
+}
+
+@Test func fileIdentityNoticesAReplacedFile() throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let file = folder.appendingPathComponent("helper")
+    try Data("old".utf8).write(to: file)
+    let launched = FileIdentity(path: file.path)
+    #expect(launched != nil)
+    #expect(FileIdentity(path: file.path) == launched)
+    try Data("new".utf8).write(to: file, options: .atomic)   // a new file moved into place, as installs do
+    #expect(FileIdentity(path: file.path) != launched)
+    try FileManager.default.removeItem(at: file)
+    #expect(FileIdentity(path: file.path) == nil)
 }

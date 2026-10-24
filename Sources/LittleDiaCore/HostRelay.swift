@@ -1,30 +1,50 @@
 import Foundation
 
 /// The heart of `littledia-host`: relays whole native-messaging frames between the browser (stdin/stdout) and the
-/// menu-bar app (Unix socket), reconnecting to the app whenever it goes away.
+/// menu-bar app (Unix socket), reconnecting to the app whenever it goes away, unless `shouldGiveUp` says this process
+/// should make way for a new one.
 public final class HostRelay {
     private let input: FileHandle
     private let output: FileHandle
     private let socketPath: String
     private let hello: InboundMessage
     private let retryInterval: TimeInterval
+    /// Asked each time an established connection to the app ends; true makes `run()` return.
+    private let shouldGiveUp: @Sendable () -> Bool
 
     private let lock = NSLock()
     private var socketFD: Int32 = -1
     private var stopped = false
 
-    public init(input: FileHandle, output: FileHandle, socketPath: String, hello: InboundMessage, retryInterval: TimeInterval = 1.0) {
+    public init(input: FileHandle, output: FileHandle, socketPath: String, hello: InboundMessage, retryInterval: TimeInterval = 1.0,
+                shouldGiveUp: @escaping @Sendable () -> Bool = { false }) {
         self.input = input
         self.output = output
         self.socketPath = socketPath
         self.hello = hello
         self.retryInterval = retryInterval
+        self.shouldGiveUp = shouldGiveUp
     }
 
-    /// Blocks until `input` reaches end of file (the browser closed the port).
+    /// Blocks until `input` reaches end of file (the browser closed the port) or the relay gives up.
     public func run() {
-        Thread { [self] in socketLoop() }.start()
+        let done = DispatchSemaphore(value: 0)
+        Thread { [self] in
+            socketLoop()
+            done.signal()
+        }.start()
+        Thread { [self] in
+            pumpInputToSocket()
+            done.signal()
+        }.start()
+        done.wait()
+        lock.withLock {
+            stopped = true
+            if socketFD >= 0 { shutdown(socketFD, SHUT_RDWR) }
+        }
+    }
 
+    private func pumpInputToSocket() {
         var decoder = FrameDecoder()
         while true {
             let chunk = input.availableData
@@ -40,11 +60,6 @@ public final class HostRelay {
                     if socketFD >= 0 { UnixSocket.writeAll(socketFD, NativeMessageFraming.encode(payload)) }
                 }
             }
-        }
-
-        lock.withLock {
-            stopped = true
-            if socketFD >= 0 { shutdown(socketFD, SHUT_RDWR) }
         }
     }
 
@@ -66,6 +81,10 @@ public final class HostRelay {
             lock.withLock {
                 socketFD = -1
                 close(fd)
+            }
+            if connected, shouldGiveUp() {
+                log("the app closed the connection and this helper was replaced on disk; exiting so the browser starts the new one")
+                return
             }
             if !isStopped { Thread.sleep(forTimeInterval: retryInterval) }
         }

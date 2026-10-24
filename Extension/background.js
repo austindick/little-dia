@@ -1,11 +1,13 @@
 // Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds, makeSerial } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds, makeSerial, nextReconnectDelay } from "./bridge-logic.js";
 
 const HOST = "com.austindick.littledia.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used when Dia doesn't report window sizes.
 const DIA_CHROME_HEIGHT = 72;
 let port = null;
+let connectedAt = 0;
+let reconnectDelay = 0;
 
 // ---- Connection to the app ------------------------------------------------------------------------------------
 
@@ -21,9 +23,13 @@ function connect() {
   port.onMessage.addListener((msg) => {
     handleAppMessage(msg).catch((e) => console.error("Little Dia: handling", msg, e));
   });
+  connectedAt = Date.now();
   port.onDisconnect.addListener(() => {
     console.warn("Little Dia: native host disconnected:", chrome.runtime.lastError?.message);
     port = null;
+    // The helper exits after the app is updated; reconnecting starts the new one.
+    reconnectDelay = nextReconnectDelay(reconnectDelay, Date.now() - connectedAt);
+    setTimeout(connect, reconnectDelay);
   });
   post({ type: "hello", extensionVersion: chrome.runtime.getManifest().version });
 }

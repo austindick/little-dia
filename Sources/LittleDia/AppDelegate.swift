@@ -25,9 +25,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let ownFolder = applicationSupport.appendingPathComponent("Little Dia", isDirectory: true)
-        try? FileManager.default.createDirectory(at: ownFolder, withIntermediateDirectories: true)
+        // Owner-only, like the socket inside it.
+        try? FileManager.default.createDirectory(at: ownFolder, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: ownFolder.path)
 
-        server = BridgeServer(socketPath: ownFolder.appendingPathComponent("bridge.sock").path)
+        server = BridgeServer(socketPath: ownFolder.appendingPathComponent("bridge.sock").path,
+                              acceptPeer: PeerVerifier.make(helperPath: Self.helperPath,
+                                                            browserRequirement: settings.browser.codeRequirement))
         link = BridgeExtensionLink(server: server)
         link.onEvent = { [weak self] message, bundleID in self?.handle(message, from: bundleID) }
         link.onConnectionsChanged = { [weak self] in
@@ -244,8 +249,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return ScreenContext(visibleFrame: screen.visibleFrame, primaryScreenHeight: screens[0].frame.height)
     }
 
+    private static var helperPath: String {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/littledia-host").path
+    }
+
     private func installNativeHostManifests(applicationSupport: URL) {
-        let hostPath = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/littledia-host").path
+        let hostPath = Self.helperPath
         for adapter in BrowserAdapter.all where NSWorkspace.shared.urlForApplication(withBundleIdentifier: adapter.bundleID) != nil {
             do {
                 let files = try NativeHostManifest.install(hostExecutablePath: hostPath, adapter: adapter, applicationSupport: applicationSupport)

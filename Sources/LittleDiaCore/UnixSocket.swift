@@ -7,7 +7,7 @@ public enum UnixSocketError: Error, Equatable {
 
 /// Minimal POSIX Unix-domain stream sockets. Every socket returned has SIGPIPE disabled.
 public enum UnixSocket {
-    /// Removes any stale socket file at `path`, then binds and listens.
+    /// Removes any stale socket file at `path`, then binds and listens. Only the owner may connect (mode 0600).
     public static func listen(path: String) throws -> Int32 {
         unlink(path)
         let fd = try makeSocket()
@@ -15,6 +15,7 @@ public enum UnixSocket {
             try withAddress(path) { addr, len in
                 guard Darwin.bind(fd, addr, len) == 0 else { throw UnixSocketError.sys(errno) }
             }
+            guard chmod(path, 0o600) == 0 else { throw UnixSocketError.sys(errno) }
             guard Darwin.listen(fd, 8) == 0 else { throw UnixSocketError.sys(errno) }
             return fd
         } catch {
@@ -41,6 +42,14 @@ public enum UnixSocket {
         guard fd >= 0 else { throw UnixSocketError.sys(errno) }
         disableSigPipe(fd)
         return fd
+    }
+
+    /// The process ID of whoever is on the other end of a connected socket.
+    public static func peerPID(_ fd: Int32) -> pid_t? {
+        var pid: pid_t = 0
+        var length = socklen_t(MemoryLayout<pid_t>.size)
+        guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &length) == 0, pid > 0 else { return nil }
+        return pid
     }
 
     /// Writes all of `data`, retrying partial writes. Returns false if the peer is gone.

@@ -15,6 +15,8 @@ public final class BridgeServer {
     public weak var delegate: BridgeServerDelegate?
 
     private let socketPath: String
+    /// Vets each connecting process by PID before anything it sends is read (see `PeerCheck`).
+    private let acceptPeer: @Sendable (pid_t) -> Bool
     private let ioQueue = DispatchQueue(label: "com.austindick.littledia.bridge.io")
     private var listenSource: DispatchSourceRead?
     private var connections: [Int: Connection] = [:]
@@ -33,15 +35,23 @@ public final class BridgeServer {
         init(fd: Int32) { self.fd = fd }
     }
 
-    public init(socketPath: String) {
+    public init(socketPath: String, acceptPeer: @escaping @Sendable (pid_t) -> Bool = { _ in true }) {
         self.socketPath = socketPath
+        self.acceptPeer = acceptPeer
     }
 
     public func start() throws {
         let fd = try UnixSocket.listen(path: socketPath)
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: ioQueue)
+        let acceptPeer = self.acceptPeer, logger = self.logger
         source.setEventHandler { [weak self] in
             guard let client = try? UnixSocket.accept(fd) else { return }
+            let pid = UnixSocket.peerPID(client)
+            guard let pid, acceptPeer(pid) else {
+                logger.notice("rejected connection from pid \(pid ?? -1)")
+                close(client)
+                return
+            }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.add(client) } }
         }
         source.setCancelHandler { close(fd) }

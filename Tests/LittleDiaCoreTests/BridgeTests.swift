@@ -146,3 +146,39 @@ private final class TestClient: @unchecked Sendable {
     #expect(await link.waitUntilReady(browser: browser, timeout: .seconds(2)))
     _ = try await connect.value
 }
+
+@Test func peerPIDIsTheConnectingProcess() throws {
+    let path = makeSocketPath()
+    let listener = try UnixSocket.listen(path: path)
+    defer { close(listener); unlink(path) }
+    let client = try UnixSocket.connect(path: path)
+    defer { close(client) }
+    let accepted = try acceptConnection(listener)
+    defer { close(accepted) }
+    #expect(UnixSocket.peerPID(accepted) == getpid())
+}
+
+@Test func socketFileIsOwnerOnly() throws {
+    let path = makeSocketPath()
+    let listener = try UnixSocket.listen(path: path)
+    defer { close(listener); unlink(path) }
+    var info = stat()
+    #expect(stat(path, &info) == 0)
+    #expect(info.st_mode & 0o777 == 0o600)
+}
+
+@MainActor @Test func rejectedPeerIsClosedAndNeverReady() async throws {
+    let path = makeSocketPath()
+    let server = BridgeServer(socketPath: path, acceptPeer: { _ in false })
+    try server.start(); defer { server.stop() }
+    let client = try TestClient(path: path)
+    try? client.send(.hostHello(browserBundleID: browser, browserPID: 99))
+    let reader = client.reader
+    let eof = try await Task.detached { try reader.next(timeout: 2) }.value
+    #expect(eof == nil)
+    #expect(!server.isReady(browser: browser))
+}
+
+@Test func parentPIDOfThisProcess() {
+    #expect(ProcessTree.parentPID(of: getpid()) == getppid())
+}
