@@ -39,6 +39,10 @@ public struct SetupStatus: Equatable, Sendable {
         self.profile = profile
     }
 
+    /// Nothing done; a placeholder before the app can check.
+    public static let unknown = SetupStatus(isDefaultBrowser: false, extensionState: .missing, accessibilityGranted: false,
+                                            browserPinnedToDesktop: false, profile: nil)
+
     /// The steps the setup window must see done. Being pinned to a desktop is a warning, not a step.
     public var requiredDone: Bool {
         isDefaultBrowser && extensionState != .missing && accessibilityGranted

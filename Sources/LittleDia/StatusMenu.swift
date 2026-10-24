@@ -1,17 +1,23 @@
 import AppKit
 import LittleDiaCore
 
-/// The menu-bar item. The menu is rebuilt every time it opens so its status lines are current.
+/// The menu-bar item. The menu is rebuilt every time it opens so its status line is current: "All set · Work", or the
+/// first thing that needs fixing, which opens the setup window when clicked.
 @MainActor
 final class StatusMenu: NSObject, NSMenuDelegate {
     private let settings: UserDefaultsSettings
-    private let link: ExtensionLink
+    private let status: () -> SetupStatus
+    private let showSetup: () -> Void
+    private let copyDiagnostics: () -> Void
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
-    init(settings: UserDefaultsSettings, link: ExtensionLink) {
+    init(settings: UserDefaultsSettings, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
+         copyDiagnostics: @escaping () -> Void) {
         self.settings = settings
-        self.link = link
+        self.status = status
+        self.showSetup = showSetup
+        self.copyDiagnostics = copyDiagnostics
         super.init()
         let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "Little Dia")
         image?.isTemplate = true
@@ -26,7 +32,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     func refresh() {
-        let browser = settings.browser
         menu.removeAllItems()
 
         menu.addItem(action("Open Links in Little Windows", checked: settings.isEnabled) { [weak self] in
@@ -35,38 +40,39 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         })
         menu.addItem(.separator())
 
-        menu.addItem(status("\(browser.name) Extension: \(link.isReady(browser: browser.bundleID) ? "Connected" : "Not Connected")"))
-        if SystemIntegration.isAccessibilityTrusted(prompt: false) {
-            menu.addItem(status("Accessibility: Granted"))
+        let line = status().menuLine
+        if case .problem = line {
+            let item = action(line.text, showSetup)
+            item.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Needs attention")
+            menu.addItem(item)
         } else {
-            menu.addItem(action("Grant Accessibility Access…") {
-                _ = SystemIntegration.isAccessibilityTrusted(prompt: true)
-                SystemIntegration.openAccessibilitySettings()
-            })
+            let item = NSMenuItem(title: line.text, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
         }
-        if SystemIntegration.isDefaultBrowser() {
-            menu.addItem(status("Default Browser: Little Dia"))
-        } else {
-            menu.addItem(action("Make Little Dia the Default Browser…") {
-                Task { await SystemIntegration.makeDefaultBrowser() }
-            })
-        }
-        if SystemIntegration.isBrowserAssignedToDesktop(browser.bundleID) {
-            menu.addItem(status("⚠︎ \(browser.name) is assigned to one desktop — set Dock › Options › Assign To › None"))
-        }
-        menu.addItem(action("Launch at Login", checked: SystemIntegration.launchAtLogin) {
-            SystemIntegration.launchAtLogin.toggle()
-        })
+        menu.addItem(action("Setup…", showSetup))
+        menu.addItem(.separator())
+
+        menu.addItem(action("Copy Diagnostics", copyDiagnostics))
+        menu.addItem(action("About Little Dia", Self.showAbout))
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: "Quit Little Dia", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
     }
 
-    private func status(_ title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
+    /// The standard About panel, with the project link and the not-affiliated line.
+    static func showAbout() {
+        let centered = NSMutableParagraphStyle()
+        centered.alignment = .center
+        let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                                                    .paragraphStyle: centered]
+        let credits = NSMutableAttributedString(string: "github.com/austindick/little-dia", attributes: small)
+        credits.addAttribute(.link, value: URL(string: "https://github.com/austindick/little-dia")!,
+                             range: NSRange(location: 0, length: credits.length))
+        credits.append(NSAttributedString(string: "\n\nNot affiliated with or endorsed by The Browser Company.", attributes: small))
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     private func action(_ title: String, checked: Bool? = nil, _ handler: @escaping () -> Void) -> NSMenuItem {

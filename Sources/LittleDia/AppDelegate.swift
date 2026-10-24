@@ -1,6 +1,7 @@
 import AppKit
 import LittleDiaCore
 import os
+import OSLog
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -132,7 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             })
         reloadProfiles()
         installNativeHostManifests(applicationSupport: applicationSupport)
-        statusMenu = StatusMenu(settings: settings, link: link)
+        statusMenu = StatusMenu(settings: settings,
+                                status: { [weak self] in self?.setupStatus() ?? .unknown },
+                                showSetup: { [weak self] in self?.showSetup() },
+                                copyDiagnostics: { [weak self] in self?.copyDiagnostics() })
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -222,7 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showSetup() {
         if setupWindow == nil {
             let model = SetupModel(extensionFolder: extensionFolder,
-                                   readStatus: { [weak self] in self?.setupStatus() ?? SetupStatus(isDefaultBrowser: false, extensionState: .missing, accessibilityGranted: false, browserPinnedToDesktop: false, profile: nil) },
+                                   readStatus: { [weak self] in self?.setupStatus() ?? .unknown },
                                    openExtensionsPage: { [weak self] in
                                        await self?.runAppleScript(DiaScript.openTab(url: "chrome://extensions")) ?? false
                                    })
@@ -230,6 +234,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         logger.notice("showing the setup window")
         setupWindow?.present()
+    }
+
+    // MARK: Diagnostics
+
+    /// Puts versions, setup status and the last hour of this app's log on the clipboard (URLs scrubbed).
+    private func copyDiagnostics() {
+        let info = Bundle.main.infoDictionary
+        let browserVersion = NSWorkspace.shared.urlForApplication(withBundleIdentifier: settings.browser.bundleID)
+            .flatMap { Bundle(url: $0)?.infoDictionary?["CFBundleShortVersionString"] as? String }
+        let text = Diagnostics.report(appVersion: info?["CFBundleShortVersionString"] as? String ?? "unknown",
+                                      extensionVersion: lastExtensionVersion,
+                                      macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                                      browserVersion: browserVersion, status: setupStatus(), profiles: loadProfiles(),
+                                      chromeHeight: settings.chromeHeight, logLines: recentLogLines())
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        let alert = NSAlert()
+        alert.messageText = "Diagnostics copied"
+        alert.informativeText = "Paste them into a message when you report a problem. Web addresses are left out."
+        NSApp.activate()
+        alert.runModal()
+    }
+
+    private func recentLogLines() -> [String] {
+        guard let store = try? OSLogStore(scope: .currentProcessIdentifier) else { return [] }
+        let since = store.position(date: Date().addingTimeInterval(-3600))
+        let ours = NSPredicate(format: "subsystem == %@", "com.austindick.littledia")
+        guard let entries = try? store.getEntries(at: since, matching: ours) else { return [] }
+        let time = DateFormatter()
+        time.dateFormat = "HH:mm:ss"
+        return entries.compactMap { $0 as? OSLogEntryLog }.map { "\(time.string(from: $0.date)) [\($0.category)] \($0.composedMessage)" }
     }
 
     // MARK: The extension
