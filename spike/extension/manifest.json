@@ -1,8 +1,0 @@
-{
-  "manifest_version": 3,
-  "name": "LBW Space Spike",
-  "version": "0.0.1",
-  "description": "Throwaway test: does a popup window open on the current desktop?",
-  "action": { "default_popup": "popup.html" },
-  "background": { "service_worker": "background.js", "type": "module" }
-}
