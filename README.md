@@ -4,6 +4,8 @@ Little Arc for [Dia](https://www.diabrowser.com). Click a link in Slack, Mail, N
 small Dia window **on the macOS desktop you're already on**, instead of pulling you over to wherever Dia's main window
 lives. You stay signed in, because it really is Dia.
 
+![A little Dia window, with Little Dia's Copy and Open in Work buttons at the right of its title bar](docs/images/little-window.png)
+
 Arc stops working on December 22, 2026; this keeps the one Arc feature Dia doesn't have.
 
 ## Install
