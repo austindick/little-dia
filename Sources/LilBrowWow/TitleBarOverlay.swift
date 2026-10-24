@@ -8,6 +8,8 @@ final class TitleBarOverlay {
     /// Dia's popup title bar (measured); the address row sits below it.
     static let titleBarHeight: CGFloat = 28
     static let rightInset: CGFloat = 8
+    /// Sits the buttons a little lower than dead center, to line up with Dia's title text.
+    static let verticalNudge: CGFloat = 2
 
     private let panel: NSPanel
     private let copyButton: PillButton
@@ -53,6 +55,7 @@ final class TitleBarOverlay {
         let size = panel.contentView?.fittingSize ?? panel.frame.size
         let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
                                                   titleBarHeight: Self.titleBarHeight, rightInset: Self.rightInset)
+            .offsetBy(dx: 0, dy: Self.verticalNudge)
         let wasHidden = !panel.isVisible
         panel.setFrame(ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight), display: true)
         if wasHidden {
@@ -108,7 +111,6 @@ private final class PillButton: NSButton {
         contentTintColor = .labelColor
         setAccessibilityLabel(label)
         wantsLayer = true
-        layer?.cornerRadius = 6
         setSymbol(symbol)
         updateFill()
     }
@@ -150,6 +152,14 @@ private final class PillButton: NSButton {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             color = NSColor.labelColor.withAlphaComponent(alpha).cgColor
         }
+        // Set here rather than once: AppKit can swap the button's layer.
+        layer?.cornerRadius = 6
+        layer?.cornerCurve = .continuous
         layer?.backgroundColor = color
+    }
+
+    override func layout() {
+        super.layout()
+        updateFill()
     }
 }

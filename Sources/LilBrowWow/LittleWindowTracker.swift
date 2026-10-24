@@ -70,7 +70,10 @@ final class LittleWindowTracker {
             let windows = axWindows(of: appElement)
             let taken = Set(windows.indices.filter { i in entries.values.contains { CFEqual($0.element, windows[i]) } })
             let candidates = windows.indices.compactMap { i in frame(of: windows[i]).map { WindowCandidate(id: i, frame: $0) } }
-            if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken), let frame = frame(of: windows[index]) {
+            // A new popup is the browser's focused window; prefer it over an older window at the same spot.
+            let focused = focusedWindow(of: pid).flatMap { f in windows.firstIndex { CFEqual($0, f) } }
+            if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused),
+               let frame = frame(of: windows[index]) {
                 let element = windows[index]
                 entries[windowId] = Entry(element: element, frame: frame, pageHeight: CGFloat(bounds.height))
                 if let observer {

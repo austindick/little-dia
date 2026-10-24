@@ -42,6 +42,11 @@ public final class FocusReturn<App> {
         cameFrom[windowId] = app
     }
 
+    /// The window is moving to the main window: don't hand focus back when it closes.
+    public func forget(_ windowId: Int) {
+        cameFrom.removeValue(forKey: windowId)
+    }
+
     public func handle(_ message: InboundMessage) async {
         switch message {
         case let .littleMoved(windowId):

@@ -17,17 +17,19 @@ public enum ScreenGeometry {
     public static let screenMargin: CGFloat = 40
     public static let minimumSize = CGSize(width: 480, height: 360)
 
-    /// Centers a window of `size` (clamped to the minimum and to the visible frame minus margins) on `screen`,
-    /// returned in top-left coordinates.
-    public static func littleWindowBounds(size: CGSize, on screen: ScreenContext) -> Bounds {
+    /// Centers a little window on `screen` and returns its page area in top-left coordinates. `size` is the page area
+    /// (clamped to the minimum); `chromeHeight` is what the browser adds above it (Dia: its title bar and address row).
+    /// The whole window, chrome included, is centered and kept inside the visible frame minus margins.
+    public static func littleWindowBounds(size: CGSize, on screen: ScreenContext, chromeHeight: CGFloat = 0) -> Bounds {
         let visible = screen.visibleFrame
         let width = min(max(size.width, minimumSize.width), visible.width - 2 * screenMargin)
-        let height = min(max(size.height, minimumSize.height), visible.height - 2 * screenMargin)
+        let pageHeight = min(max(size.height, minimumSize.height), visible.height - 2 * screenMargin - chromeHeight)
+        let windowHeight = pageHeight + chromeHeight
         let x = visible.minX + (visible.width - width) / 2
-        let y = visible.minY + (visible.height - height) / 2
-        return Bounds(left: Int(x.rounded(.down)),
-                      top: Int((screen.primaryScreenHeight - (y + height)).rounded(.down)),
-                      width: Int(width), height: Int(height))
+        let y = visible.minY + (visible.height - windowHeight) / 2
+        let windowTop = screen.primaryScreenHeight - (y + windowHeight)
+        return Bounds(left: Int(x.rounded(.down)), top: Int((windowTop + chromeHeight).rounded(.down)),
+                      width: Int(width), height: Int(pageHeight))
     }
 
     /// The page area of a browser window whose title bar and address row (`chromeHeight`) sit above it.
@@ -60,8 +62,10 @@ public struct WindowCandidate<ID: Hashable>: Equatable {
 }
 
 /// Finds the window the browser created for `bounds`. Dia adds its title bar and address row *above* the requested
-/// page area, so only the left, right and bottom edges are compared.
-public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>], bounds: Bounds, excluding: Set<ID>, tolerance: CGFloat = 6) -> ID? {
+/// page area, so only the left, right and bottom edges are compared. When several windows match, `preferring` (the
+/// browser's focused window, which a new popup always is) wins.
+public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>], bounds: Bounds, excluding: Set<ID>,
+                                            tolerance: CGFloat = 6, preferring: ID? = nil) -> ID? {
     let left = CGFloat(bounds.left)
     let right = CGFloat(bounds.left + bounds.width)
     let bottom = CGFloat(bounds.top + bounds.height)
@@ -69,6 +73,7 @@ public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>],
     for candidate in candidates where !excluding.contains(candidate.id) {
         let deltas = [abs(candidate.frame.minX - left), abs(candidate.frame.maxX - right), abs(candidate.frame.maxY - bottom)]
         guard deltas.allSatisfy({ $0 <= tolerance }) else { continue }
+        if candidate.id == preferring { return candidate.id }
         let score = deltas.reduce(0, +)
         if best == nil || score < best!.score {
             best = (candidate.id, score)

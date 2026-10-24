@@ -26,6 +26,8 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     var appearingWidthDelta = 0
     /// How long the extension takes to confirm after the window is on screen.
     var ackDelay: Duration = .zero
+    /// The window reaches the screen this long after the request (nil: right away).
+    var windowDelay: Duration?
     weak var screen: FakeBrowser?
 
     func isReady(browser: String) -> Bool { ready }
@@ -38,8 +40,16 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult {
         openCalls.append(request)
         screen?.calls.append("open")
-        if case .opened = result, !opensPhantomWindow {
-            screen?.onScreen.append(WindowCandidate(id: 500 + openCalls.count, frame: CGRect(x: CGFloat(request.bounds.left), y: CGFloat(request.bounds.top - 72), width: CGFloat(request.bounds.width - appearingWidthDelta), height: CGFloat(request.bounds.height + 72))))
+        if !opensPhantomWindow {
+            let window = WindowCandidate(id: 500 + openCalls.count, frame: CGRect(x: CGFloat(request.bounds.left), y: CGFloat(request.bounds.top - 72), width: CGFloat(request.bounds.width - appearingWidthDelta), height: CGFloat(request.bounds.height + 72)))
+            if let windowDelay {
+                Task { @MainActor [weak screen] in
+                    try? await Task.sleep(for: windowDelay)
+                    screen?.onScreen.append(window)
+                }
+            } else {
+                screen?.onScreen.append(window)
+            }
         }
         if ackDelay > .zero { try? await Task.sleep(for: ackDelay) }
         screen?.calls.append("ack")
@@ -62,11 +72,14 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     func onScreenWindows(bundleID: String) -> [WindowCandidate<Int>] { onScreen }
 }
 
+private var abandoned: [Int] = []
+
 @MainActor private func makeRouter() -> (LinkRouter, FakeSettings, FakeLink, FakeBrowser) {
     let settings = FakeSettings(), link = FakeLink(), browser = FakeBrowser()
     link.screen = browser
     let router = LinkRouter(settings: settings, link: link, browser: browser, screen: { primary },
                             timeouts: fast, makeRequestID: { "r1" })
+    router.onAbandon = { abandoned.append($0) }
     return (router, settings, link, browser)
 }
 
@@ -87,7 +100,7 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
 @MainActor @Test func readyBrowserOpensLittleAndActivatesIt() async {
     let (router, _, link, browser) = makeRouter()
     #expect(await router.route(github) == .little(windowId: 42))
-    #expect(link.openCalls == [OpenRequest(requestId: "r1", url: github, bounds: Bounds(left: 300, top: 137, width: 1000, height: 750), focused: true)])
+    #expect(link.openCalls == [OpenRequest(requestId: "r1", url: github, bounds: Bounds(left: 300, top: 173, width: 1000, height: 750), focused: true)])
     #expect(browser.activateCalls == ["company.thebrowser.dia"])
     #expect(browser.openNormallyCalls.isEmpty)
 }
@@ -118,6 +131,7 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
 @MainActor @Test func ackTimeoutFallsBack() async {
     let (router, _, link, browser) = makeRouter()
     link.result = .timedOut
+    link.opensPhantomWindow = true   // nothing reached the screen either
     #expect(await router.route(github) == .openedNormally(.timedOut))
     #expect(browser.openNormallyCalls == [github])
     #expect(browser.activateCalls.isEmpty)
@@ -126,6 +140,7 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
 @MainActor @Test func openFailedFallsBack() async {
     let (router, _, link, browser) = makeRouter()
     link.result = .failed("boom")
+    link.opensPhantomWindow = true   // nothing reached the screen either
     #expect(await router.route(github) == .openedNormally(.openFailed))
     #expect(browser.openNormallyCalls == [github])
 }
@@ -133,8 +148,10 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
 @MainActor @Test func phantomWindowFallsBackAndClosesIt() async {   // Dia cold start: "opened" but never on screen
     let (router, _, link, browser) = makeRouter()
     link.opensPhantomWindow = true
+    abandoned = []
     #expect(await router.route(github) == .openedNormally(.notVisible))
     #expect(link.closeCalls == [42])
+    #expect(abandoned == [42])
     #expect(browser.openNormallyCalls == [github])
     #expect(browser.activateCalls.isEmpty)
 }
@@ -151,4 +168,26 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     link.appearingWidthDelta = 16
     #expect(await router.route(github) == .little(windowId: 42))
     #expect(browser.activateCalls == ["company.thebrowser.dia"])
+}
+
+@MainActor @Test func theVisibilityClockStartsWhenTheExtensionConfirms() async {   // review #4
+    let (router, _, link, _) = makeRouter()
+    link.ackDelay = .milliseconds(250)
+    link.windowDelay = .milliseconds(300)   // 50ms after the confirmation; visibility allows 200ms from then
+    #expect(await router.route(github) == .little(windowId: 42))
+}
+
+@MainActor @Test func aPopupThatAppearsWithoutConfirmationIsNotOpenedTwice() async {   // review #4
+    let (router, _, link, browser) = makeRouter()
+    link.result = .timedOut
+    #expect(await router.route(github) == .littleUnconfirmed)
+    #expect(browser.openNormallyCalls.isEmpty)
+    #expect(browser.activateCalls == ["company.thebrowser.dia"])
+}
+
+@MainActor @Test func cascadesWhenALittleWindowAlreadySitsThere() async {   // review #3
+    let (router, _, link, browser) = makeRouter()
+    browser.onScreen.append(WindowCandidate(id: 7, frame: CGRect(x: 300, y: 101, width: 1000, height: 822)))
+    _ = await router.route(github)
+    #expect(link.openCalls.first?.bounds == Bounds(left: 330, top: 203, width: 1000, height: 750))
 }

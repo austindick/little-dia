@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         router = LinkRouter(settings: settings, link: link, browser: browserControl, screen: Self.currentScreen)
+        router.onAbandon = { [weak self] windowId in _ = self?.tracker.close(windowId: windowId) }
         focusReturn = FocusReturn(
             isOwnOrBrowser: { [settings] app in
                 app == NSRunningApplication.current || app.bundleIdentifier == settings?.browser.bundleID
@@ -150,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func moveToMainWindow(_ windowId: Int) {
         overlay.hide()
+        focusReturn.forget(windowId)
         moveToMain.start(windowId: windowId)
     }
 

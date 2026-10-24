@@ -76,3 +76,11 @@ import Testing
     #expect(w.focus.origin(frontmost: "Slack") == "Slack")
     #expect(w.focus.origin(frontmost: "Dia") == "Mail")
 }
+
+@MainActor @Test func forgettingAWindowKeepsTheBrowserFocused() async {   // review #6: Move to Dia clicked
+    let w = World()
+    w.focus.littleWindowOpened(42, cameFrom: "Slack")
+    w.focus.forget(42)
+    await w.focus.handle(.littleClosed(windowId: 42))
+    #expect(w.activated.isEmpty)
+}

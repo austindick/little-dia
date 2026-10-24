@@ -69,3 +69,20 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(ScreenGeometry.pageBounds(ofWindow: CGRect(x: 300, y: 65, width: 1100, height: 872), chromeHeight: 72)
             == Bounds(left: 300, top: 137, width: 1100, height: 800))
 }
+
+@Test func centersTheWholeWindowIncludingTheBrowsersTitleBar() {   // review #2: Dia adds 72pt above the page area
+    #expect(ScreenGeometry.littleWindowBounds(size: CGSize(width: 1000, height: 750), on: primary, chromeHeight: 72)
+            == Bounds(left: 300, top: 173, width: 1000, height: 750))
+}
+
+@Test func clampsSoTheTitleBarStaysOnScreen() {
+    #expect(ScreenGeometry.littleWindowBounds(size: CGSize(width: 3000, height: 2000), on: primary, chromeHeight: 72)
+            == Bounds(left: 40, top: 136, width: 1520, height: 824))
+}
+
+@Test func prefersTheFocusedWindowWhenSeveralMatch() {   // review #3: the new popup is the browser's focused window
+    let f = CGRect(x: 300, y: 137, width: 1000, height: 750)
+    let twins = [WindowCandidate(id: 1, frame: f), WindowCandidate(id: 2, frame: f)]
+    #expect(matchLittleWindow(twins, bounds: target, excluding: [], preferring: 2) == 2)
+    #expect(matchLittleWindow(twins, bounds: target, excluding: [], preferring: 9) == 1)
+}

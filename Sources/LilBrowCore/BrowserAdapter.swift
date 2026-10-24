@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Everything browser-specific lives here, so supporting another Chromium browser means adding one adapter.
@@ -6,16 +7,20 @@ public struct BrowserAdapter: Equatable, Sendable {
     public let bundleID: String
     /// Native-messaging manifest folders, relative to ~/Library/Application Support.
     public let nativeHostDirectories: [String]
+    /// Height the browser adds above a popup's page area (title bar and address row).
+    public let chromeHeight: CGFloat
 
-    public init(name: String, bundleID: String, nativeHostDirectories: [String]) {
+    public init(name: String, bundleID: String, nativeHostDirectories: [String], chromeHeight: CGFloat = 0) {
         self.name = name
         self.bundleID = bundleID
         self.nativeHostDirectories = nativeHostDirectories
+        self.chromeHeight = chromeHeight
     }
 
     /// Dia's folder is reported as both of these; installing to both settles which one it reads.
     public static let dia = BrowserAdapter(name: "Dia", bundleID: "company.thebrowser.dia",
-                                           nativeHostDirectories: ["Dia/NativeMessagingHosts", "Dia/User Data/NativeMessagingHosts"])
+                                           nativeHostDirectories: ["Dia/NativeMessagingHosts", "Dia/User Data/NativeMessagingHosts"],
+                                           chromeHeight: 72)   // measured 2026-10-23
     public static let chrome = BrowserAdapter(name: "Chrome", bundleID: "com.google.Chrome",
                                               nativeHostDirectories: ["Google/Chrome/NativeMessagingHosts"])
     public static let all: [BrowserAdapter] = [.dia, .chrome]

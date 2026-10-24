@@ -42,6 +42,8 @@ public enum FallbackReason: Equatable, Sendable {
 
 public enum RouteOutcome: Equatable, Sendable {
     case little(windowId: Int)
+    /// The popup reached the screen but the extension never confirmed it; the link is not opened a second time.
+    case littleUnconfirmed
     case openedNormally(FallbackReason)
 }
 
@@ -55,6 +57,8 @@ public final class LinkRouter {
     private let screen: () -> ScreenContext
     private let timeouts: RouterTimeouts
     private let makeRequestID: () -> String
+    /// Called with a popup the router gave up on (it never reached the screen in time), so it can be closed natively.
+    public var onAbandon: ((Int) -> Void)?
     private let logger = Logger(subsystem: "com.lilbrowwow", category: "router")
 
     public init(settings: LittleSettings, link: ExtensionLink, browser: BrowserControl, screen: @escaping () -> ScreenContext,
@@ -84,41 +88,55 @@ public final class LinkRouter {
             guard await link.waitUntilReady(browser: bundleID, timeout: timeouts.runningToReady) else { return fallback(.notReady) }
         }
 
-        let bounds = ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: screen())
-        let windowsBefore = Set(browser.onScreenWindows(bundleID: bundleID).map(\.id))
+        let windowsBefore = browser.onScreenWindows(bundleID: bundleID)
+        var bounds = ScreenGeometry.littleWindowBounds(size: settings.littleWindowSize, on: screen(),
+                                                       chromeHeight: settings.browser.chromeHeight)
+        // Don't stack exactly on top of an existing little window: it would hide it and confuse window matching.
+        for _ in 0..<10 where matchLittleWindow(windowsBefore, bounds: bounds, excluding: []) != nil {
+            bounds = Bounds(left: bounds.left + 30, top: bounds.top + 30, width: bounds.width, height: bounds.height)
+        }
+        let before = Set(windowsBefore.map(\.id))
         // Dia animates the popup open from slightly narrower than requested, so allow 5%.
         let isTheNewPopup: (WindowCandidate<Int>) -> Bool = {
-            !windowsBefore.contains($0.id) && abs($0.frame.width - CGFloat(bounds.width)) <= CGFloat(bounds.width) * 0.05
+            !before.contains($0.id) && abs($0.frame.width - CGFloat(bounds.width)) <= CGFloat(bounds.width) * 0.05
         }
         let request = OpenRequest(requestId: makeRequestID(), url: url, bounds: bounds, focused: true)
 
         // Watch for the popup while the extension is still answering, and bring the browser forward the instant it
-        // appears: the popup is drawn behind the current app until then.
+        // appears: the popup is drawn behind the current app until then. Once the extension confirms, the popup has
+        // `visibility` to reach the screen.
         let ack = AckBox()
         let link = self.link, timeouts = self.timeouts
         let ackTask = Task { @MainActor in
             let result = await link.open(request, browser: bundleID, timeout: timeouts.openAck)
             ack.result = result
+            ack.at = ContinuousClock.now
             return result
         }
         var appeared = false
-        _ = await poll(for: timeouts.visibility, every: timeouts.pollInterval) {
+        while true {
             if browser.onScreenWindows(bundleID: bundleID).contains(where: isTheNewPopup) {
                 appeared = true
-                return true
+                break
             }
-            if let result = ack.result, case .opened = result { return false }
-            return ack.result != nil   // the extension already said no
+            if let result = ack.result, let at = ack.at {
+                guard case .opened = result else { break }                     // the extension said no
+                if ContinuousClock.now - at >= timeouts.visibility { break }   // confirmed, but never shown
+            }
+            try? await Task.sleep(for: timeouts.pollInterval)
         }
         if appeared { browser.activate(bundleID: bundleID) }
 
         switch await ackTask.value {
         case let .opened(windowId):
             guard appeared else {
+                onAbandon?(windowId)
                 link.close(windowId: windowId, browser: bundleID)
                 return fallback(.notVisible)
             }
             return .little(windowId: windowId)
+        case .failed where appeared, .timedOut where appeared:
+            return .littleUnconfirmed
         case .failed:
             return fallback(.openFailed)
         case .timedOut:
@@ -141,4 +159,5 @@ public final class LinkRouter {
 @MainActor
 private final class AckBox {
     var result: OpenResult?
+    var at: ContinuousClock.Instant?
 }
