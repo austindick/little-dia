@@ -29,6 +29,10 @@ import Testing
     #expect(BrowserAdapter.dia.titleBarColor?.light == RGBColor(red: 255, green: 255, blue: 255))
 }
 
+@Test func diaTitleBarIsBlueGreyInDarkMode() {   // measured from a screenshot of a little window
+    #expect(BrowserAdapter.dia.titleBarColor?.dark == RGBColor(red: 32, green: 36, blue: 42))
+}
+
 @Test func manifestJSONHasRequiredFields() throws {
     let json = try JSONSerialization.jsonObject(with: NativeHostManifest.json(hostExecutablePath: "/x/littledia-host")) as! [String: Any]
     #expect(json["name"] as? String == "com.austindick.littledia.bridge")

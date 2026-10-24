@@ -34,9 +34,9 @@ public struct BrowserAdapter: Equatable, Sendable {
                                            userDataDirectory: "Dia/User Data",
                                            // Dia's own designated requirement, narrowed to The Browser Company's team.
                                            codeRequirement: #"anchor apple generic and identifier "company.thebrowser.dia" and certificate leaf[subject.OU] = "S6N382Y83G""#,
-                                           // Light measured 2026-10-24. Dark is estimated from Dia's window colours until measured.
+                                           // Measured 2026-10-24 from screenshots of a little window.
                                            titleBarColor: AppearanceColor(light: RGBColor(red: 255, green: 255, blue: 255),
-                                                                          dark: RGBColor(red: 22, green: 21, blue: 23)))
+                                                                          dark: RGBColor(red: 32, green: 36, blue: 42)))
     public static let chrome = BrowserAdapter(name: "Chrome", bundleID: "com.google.Chrome",
                                               nativeHostDirectories: ["Google/Chrome/NativeMessagingHosts"])
     public static let all: [BrowserAdapter] = [.dia, .chrome]
