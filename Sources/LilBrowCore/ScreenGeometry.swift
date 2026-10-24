@@ -42,11 +42,12 @@ public enum ScreenGeometry {
         CGRect(x: rect.minX, y: primaryScreenHeight - rect.maxY, width: rect.width, height: rect.height)
     }
 
-    /// Where the title-bar buttons sit: in the window's top-right corner, `inset` from both the top and the right edge
-    /// (top-left coordinates).
-    public static func overlayFrame(windowTopLeft: CGRect, overlaySize: CGSize, inset: CGFloat) -> CGRect {
-        CGRect(x: windowTopLeft.maxX - inset - overlaySize.width, y: windowTopLeft.minY + inset,
-               width: overlaySize.width, height: overlaySize.height)
+    /// Where the title-bar buttons sit: in the window's top-right corner, `topInset` below its top edge and
+    /// `rightInset` in from its right edge (top-left coordinates). The size is rounded up to whole points: a window's
+    /// width is rounded down otherwise, clipping the buttons' right edge.
+    public static func overlayFrame(windowTopLeft: CGRect, overlaySize: CGSize, topInset: CGFloat, rightInset: CGFloat) -> CGRect {
+        let width = overlaySize.width.rounded(.up), height = overlaySize.height.rounded(.up)
+        return CGRect(x: windowTopLeft.maxX - rightInset - width, y: windowTopLeft.minY + topInset, width: width, height: height)
     }
 }
 

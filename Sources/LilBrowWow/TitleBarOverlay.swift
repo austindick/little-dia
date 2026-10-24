@@ -7,8 +7,9 @@ import LilBrowCore
 /// other profiles.
 @MainActor
 final class TitleBarOverlay {
-    /// Gap above and to the right of the buttons, inside the window's top-right corner.
-    static let inset: CGFloat = 5
+    /// Gaps above and to the right of the buttons, inside the window's top-right corner.
+    static let topInset: CGFloat = 5
+    static let rightInset: CGFloat = 6
     /// Dia's popup window corner radius (estimated); the rightmost button's top-right corner nests inside it.
     static let windowCornerRadius: CGFloat = 16
 
@@ -59,7 +60,7 @@ final class TitleBarOverlay {
         copyButton.action = #selector(copyClicked)
         stack.addArrangedSubview(copyButton)
 
-        let nest = Self.windowCornerRadius - Self.inset
+        let nest = Self.windowCornerRadius - Self.rightInset
         let destination = profiles?.current ?? browserName
         let split = !(profiles?.others.isEmpty ?? true)
         let move = PillButton(title: "Open in \(destination)", symbol: "arrow.up.forward.app", label: "Open in \(destination)",
@@ -86,7 +87,8 @@ final class TitleBarOverlay {
     func show(_ window: TrackedWindow, primaryScreenHeight: CGFloat) {
         current = window
         let size = stack.fittingSize
-        let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size, inset: Self.inset)
+        let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
+                                                  topInset: Self.topInset, rightInset: Self.rightInset)
         let wasHidden = !panel.isVisible
         panel.setFrame(ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight), display: true)
         if wasHidden {

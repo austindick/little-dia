@@ -31,9 +31,16 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(ScreenGeometry.appKitRect(fromTopLeft: CGRect(x: 300, y: 137, width: 1000, height: 750), primaryScreenHeight: 1000) == CGRect(x: 300, y: 113, width: 1000, height: 750))
 }
 
-@Test func overlaySitsInTheTitleBarsTopRightCornerWithEvenGaps() {
-    #expect(ScreenGeometry.overlayFrame(windowTopLeft: CGRect(x: 300, y: 137, width: 1000, height: 750), overlaySize: CGSize(width: 120, height: 23), inset: 5)
-            == CGRect(x: 1175, y: 142, width: 120, height: 23))
+@Test func overlaySitsInTheTitleBarsTopRightCorner() {
+    #expect(ScreenGeometry.overlayFrame(windowTopLeft: CGRect(x: 300, y: 137, width: 1000, height: 750), overlaySize: CGSize(width: 120, height: 23),
+                                        topInset: 5, rightInset: 6)
+            == CGRect(x: 1174, y: 142, width: 120, height: 23))
+}
+
+@Test func overlaySizeIsRoundedUpSoNothingIsClipped() {   // the panel's width would otherwise round down
+    #expect(ScreenGeometry.overlayFrame(windowTopLeft: CGRect(x: 300, y: 137, width: 1000, height: 750), overlaySize: CGSize(width: 120.4, height: 22.6),
+                                        topInset: 5, rightInset: 6)
+            == CGRect(x: 1173, y: 142, width: 121, height: 23))
 }
 
 @Test func matchesWithinTolerance() {
