@@ -12,9 +12,15 @@ IDENTITY="${LITTLEDIA_SIGN_IDENTITY:--}"
 APP="build/Little Dia.app"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-swift build -c release --product LittleDia
-swift build -c release --product littledia-host
-BIN="$(swift build -c release --show-bin-path)"
+# Universal (Apple silicon and Intel) when the toolchain can; otherwise this Mac's architecture only.
+ARCHS=(--arch arm64 --arch x86_64)
+if ! swift build -c release "${ARCHS[@]}" --product LittleDia || ! swift build -c release "${ARCHS[@]}" --product littledia-host; then
+  echo "warning: universal build failed; building for this Mac's architecture only" >&2
+  ARCHS=()
+  swift build -c release --product LittleDia
+  swift build -c release --product littledia-host
+fi
+BIN="$(swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers"

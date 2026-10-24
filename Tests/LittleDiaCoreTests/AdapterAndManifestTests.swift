@@ -51,3 +51,12 @@ import Testing
     #expect(BrowserAdapter.forBundleID("com.google.Chrome") == .chrome)
     #expect(BrowserAdapter.forBundleID("company.thebrowser.dia") == .dia)
 }
+
+/// The updater and the extension reload both compare versions; the app and its bundled extension must ship together.
+@Test func appAndExtensionVersionsMatch() throws {
+    let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: repo.appendingPathComponent("Resources/Info.plist")), format: nil) as! [String: Any]
+    let manifest = try JSONSerialization.jsonObject(with: Data(contentsOf: repo.appendingPathComponent("Extension/manifest.json"))) as! [String: Any]
+    #expect(plist["CFBundleShortVersionString"] as? String == manifest["version"] as? String)
+    #expect(manifest["version"] as? String == "1.0.0")
+}
