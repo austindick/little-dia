@@ -5,6 +5,8 @@ import LittleDiaCore
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
 /// With more than one browser profile, the Move button splits: "↗ Work" moves the page live, and "▾" offers the
 /// other profiles.
+/// A click-through backdrop sits just below the buttons: frosted title-bar material that fades in from the left, so a
+/// long page title fades out before the buttons instead of running under them.
 @MainActor
 final class TitleBarOverlay {
     /// Gaps above and to the right of the buttons, inside the window's top-right corner.
@@ -12,8 +14,11 @@ final class TitleBarOverlay {
     static let rightInset: CGFloat = 5
     /// Dia's popup window corner radius (estimated); the rightmost button's top-right corner nests inside it.
     static let windowCornerRadius: CGFloat = 16
+    /// How far left of the buttons the backdrop starts fading in.
+    static let fadeWidth: CGFloat = 40
 
     private let panel: NSPanel
+    private let backdrop: NSPanel
     private let stack = NSStackView()
     private let browserName: String
     private let onCopy: (Int) -> Void
@@ -31,7 +36,25 @@ final class TitleBarOverlay {
         self.onMove = onMove
         self.onSendToProfile = onSendToProfile
 
-        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel = Self.makePanel()
+        backdrop = Self.makePanel()
+        // The fade strip lies over Dia's title bar, which must stay draggable and clickable.
+        backdrop.ignoresMouseEvents = true
+        let material = NSVisualEffectView()
+        material.material = .titlebar
+        material.blendingMode = .behindWindow
+        material.state = .active
+        material.maskImage = Self.backdropMask(cornerRadius: Self.windowCornerRadius - Self.rightInset)
+        backdrop.contentView = material
+
+        stack.orientation = .horizontal
+        stack.spacing = 4
+        panel.contentView = stack
+        setProfiles(nil)
+    }
+
+    private static func makePanel() -> NSPanel {
+        let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .transient]
         panel.isOpaque = false
@@ -42,14 +65,31 @@ final class TitleBarOverlay {
         panel.isFloatingPanel = true
         // Disappear instantly when hidden (drag/resize); the fade-in on show is done by hand.
         panel.animationBehavior = .none
-
-        stack.orientation = .horizontal
-        stack.spacing = 4
-        panel.contentView = stack
-        setProfiles(nil)
+        return panel
     }
 
-    /// Rebuilds the buttons for the browser's profiles (nil: unknown, a plain Move button labeled with the browser).
+    /// Opaque where the buttons are (rounded on the right like the rightmost button), fading to clear over
+    /// `fadeWidth` on the left. The caps keep the fade and the corners fixed while the middle stretches.
+    private static func backdropMask(cornerRadius: CGFloat) -> NSImage {
+        let height = PillButton.height
+        let size = NSSize(width: fadeWidth + 2 * cornerRadius + 1, height: height)
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.black.setFill()
+            // Solid from the end of the fade to the rounded right end.
+            NSRect(x: fadeWidth, y: 0, width: rect.width - fadeWidth - cornerRadius, height: rect.height).fill()
+            // Right end: rounded like the rightmost button.
+            NSBezierPath(roundedRect: NSRect(x: rect.width - 2 * cornerRadius, y: 0, width: 2 * cornerRadius, height: rect.height),
+                         xRadius: cornerRadius, yRadius: cornerRadius).fill()
+            // Left end: a horizontal fade from clear to opaque.
+            NSGradient(starting: .clear, ending: .black)?.draw(in: NSRect(x: 0, y: 0, width: fadeWidth, height: rect.height), angle: 0)
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: 0, left: fadeWidth, bottom: 0, right: cornerRadius)
+        image.resizingMode = .stretch
+        return image
+    }
+
+        /// Rebuilds the buttons for the browser's profiles (nil: unknown, a plain Move button labeled with the browser).
     func setProfiles(_ profiles: BrowserProfiles?) {
         self.profiles = profiles
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -90,23 +130,33 @@ final class TitleBarOverlay {
         let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
                                                   topInset: Self.topInset, rightInset: Self.rightInset)
         let wasHidden = !panel.isVisible
-        panel.setFrame(ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight), display: true)
+        let frame = ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight)
+        panel.setFrame(frame, display: true)
+        backdrop.setFrame(NSRect(x: frame.minX - Self.fadeWidth, y: frame.minY, width: frame.width + Self.fadeWidth, height: frame.height),
+                          display: true)
         if wasHidden {
             panel.alphaValue = 0
-            panel.orderFrontRegardless()
+            backdrop.alphaValue = 0
+        }
+        // The backdrop goes up first so the buttons stay on top of it.
+        backdrop.orderFrontRegardless()
+        panel.orderFrontRegardless()
+        if wasHidden {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.12
                 panel.animator().alphaValue = 1
+                backdrop.animator().alphaValue = 1
             }
-        } else {
-            panel.orderFrontRegardless()
         }
     }
 
     func hide() {
         current = nil
-        panel.alphaValue = 0   // stops a fade-in that may still be running
-        panel.orderOut(nil)
+        // Setting alpha stops a fade-in that may still be running.
+        for window in [panel, backdrop] {
+            window.alphaValue = 0
+            window.orderOut(nil)
+        }
     }
 
     var isVisible: Bool { panel.isVisible }
