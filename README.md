@@ -6,10 +6,11 @@ Dia's main window lives. You stay signed in, because it really is Dia.
 
 The little window has two buttons on its title bar:
 
-- **Copy** copies the page's current URL.
+- **Copy** (the link icon) copies the page's current URL.
 - **↗ Dia** moves the page into Dia's main window, keeping your scroll position and anything you've typed, and takes you there.
 
-Closing a little window puts you back in the app you came from.
+Closing a little window puts you back in the app you came from. Resize one and the next ones open at that size
+(1200×750 to start).
 
 Arc stops working on December 22, 2026; this exists to keep the one Arc feature Dia doesn't have.
 
@@ -61,13 +62,14 @@ Turn little windows off at any time with *Open Links in Little Windows* in the m
 
 ## Known limitations
 
-- **Full-screen apps:** macOS won't put another app's window on a full-screen desktop, so links clicked there open
-  the little window on a regular desktop.
+- **Full-screen apps:** macOS won't put another app's window on a full-screen desktop, so a link clicked there can't
+  open a little window. After about 2 seconds it opens in Dia's main window instead.
 - **Briefly drawn behind:** the little window can appear behind the current app for a few hundredths of a second
   before coming forward. Bringing Dia forward before the window exists would switch desktops.
 - **Buttons hide while you drag or resize** the little window, and come back when you let go.
-- **No buttons on some pages**, such as Dia's own pages, if Accessibility isn't granted.
-- **Window size isn't remembered** in Dia, because Dia doesn't report window resizes to extensions.
+- **No title-bar buttons without Accessibility access.** Grant it from the menu.
+- **The menu shows only whether the extension is connected,** not which Dia profile it's in. Extensions can't read
+  Dia's profile names.
 - **No keyboard shortcuts** in v1.
 - **Only Dia is supported for now.** The browser-specific details live in `BrowserAdapter`. Chromium browsers need an
   adapter, and Firefox/Zen need a Firefox build of the extension.

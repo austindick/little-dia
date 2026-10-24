@@ -47,7 +47,7 @@ Three pieces:
 
 1. A link is clicked in Slack on desktop 2. Dia's main window is on desktop 1.
 2. macOS hands the URL to the menu-bar app.
-3. The app works out where the little window goes: centered on the screen that has the mouse pointer, at the last size used (default about 1000×750). It sends `{open, url, bounds}` to the extension through the helper.
+3. The app works out where the little window goes: centered on the screen that has the mouse pointer (the whole window, including Dia's 72 pt title bar and address row), at the size the user last resized one to (default 1200×750). If another little window already sits exactly there, the new one is offset. It sends `{open, url, bounds}` to the extension through the helper.
 4. The extension creates a Dia popup window at those bounds, and it appears on desktop 2. Whether it really lands on the current desktop without switching is the **#1 risk**; see Risks.
 5. The app identifies that window through the macOS Accessibility API and attaches the title-bar buttons.
 
@@ -68,7 +68,7 @@ Three pieces:
 
 ### Edge behavior (my calls, accepted by the owner in playback)
 
-- **Profile:** little windows use the owner's **default Dia profile**, which is the one the extension is installed in. The menu shows which profile is connected.
+- **Profile:** little windows use the owner's **default Dia profile**, which is the one the extension is installed in. The menu shows connection status only, because extensions can't read Dia's profile names.
 - **Dia not running** *(changed by the owner on 2026-10-23, during the build)*: open the link in Dia's main window the normal way. Little windows only appear once Dia is already running. The original plan, launching Dia in the background and then opening a little window, lost links: Dia accepts popups created while it is still starting up but never shows them.
 - **A little window that never reaches the screen:** if no new window of the requested width appears on the current desktop within about 2 s of the extension confirming it, the app closes that popup and opens the link in Dia normally. Dia is brought to the front only after the popup is on screen.
 - **Extension unreachable** (disabled, not installed, or timed out): open the link in Dia the normal way. **A link must never get lost.**
