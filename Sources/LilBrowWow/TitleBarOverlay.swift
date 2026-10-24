@@ -64,8 +64,8 @@ final class TitleBarOverlay {
         let destination = profiles?.current ?? browserName
         let split = !(profiles?.others.isEmpty ?? true)
         let move = PillButton(title: "Open in \(destination)", symbol: "arrow.up.forward.app", label: "Open in \(destination)",
-                              corners: split ? .init(topLeft: 6, topRight: 0, bottomRight: 0, bottomLeft: 6)
-                                             : .init(topLeft: 6, topRight: nest, bottomRight: 6, bottomLeft: 6))
+                              corners: split ? .init(topLeft: nest, topRight: 0, bottomRight: 0, bottomLeft: nest)
+                                             : .init(topLeft: nest, topRight: nest, bottomRight: nest, bottomLeft: nest))
         move.toolTip = "Move this page to the main \(browserName) window"
         move.target = self
         move.action = #selector(moveClicked)
@@ -73,7 +73,7 @@ final class TitleBarOverlay {
 
         if split {
             let chevron = PillButton(title: nil, symbol: "chevron.down", label: "Open in another profile", width: 26,
-                                     corners: .init(topLeft: 0, topRight: nest, bottomRight: 6, bottomLeft: 0))
+                                     corners: .init(topLeft: 0, topRight: nest, bottomRight: nest, bottomLeft: 0))
             chevron.toolTip = "Open this page in another profile"
             chevron.target = self
             chevron.action = #selector(chevronClicked(_:))
