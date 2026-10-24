@@ -44,3 +44,23 @@ test("reportedBounds falls back to the request when the browser reports a 0x0 wi
   assert.deepEqual(reportedBounds(bounds, { left: 0, top: 0, width: 0, height: 0 }), bounds);
   assert.deepEqual(reportedBounds(bounds, { left: 300, top: 65, width: 1000, height: 822 }), { left: 300, top: 137, width: 1000, height: 750 });
 });
+
+test("serial runs async updates one at a time, in order", async () => {
+  const { makeSerial } = await import("../bridge-logic.js");
+  const serial = makeSerial();
+  const log = [];
+  const step = (name, ms) => serial(async () => {
+    log.push(`start ${name}`);
+    await new Promise((r) => setTimeout(r, ms));
+    log.push(`end ${name}`);
+  });
+  await Promise.all([step("a", 20), step("b", 1)]);
+  assert.deepEqual(log, ["start a", "end a", "start b", "end b"]);
+});
+
+test("serial keeps going after a failed update", async () => {
+  const { makeSerial } = await import("../bridge-logic.js");
+  const serial = makeSerial();
+  await assert.rejects(serial(async () => { throw new Error("boom"); }));
+  assert.equal(await serial(async () => "ok"), "ok");
+});

@@ -39,3 +39,16 @@ export function reportedBounds(requested, win) {
   if (!(win.width > 0 && win.height > 0)) return requested;
   return windowBounds(win, chromeHeight(requested.height, win.height));
 }
+
+/**
+ * Returns a function that runs async tasks one at a time, in call order, so read-modify-write updates of shared
+ * state can't interleave. A failed task doesn't stop later ones.
+ */
+export function makeSerial() {
+  let tail = Promise.resolve();
+  return (task) => {
+    const run = tail.then(task, task);
+    tail = run.catch(() => {});
+    return run;
+  };
+}

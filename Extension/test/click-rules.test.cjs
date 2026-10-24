@@ -15,6 +15,7 @@ const cases = [
   [{ button: 0 }, { ...base, target: "_blank", hasDownload: true }, "default"],
   [{ button: 0, altKey: true }, { ...base, target: "_blank" }, "default"],
   [{ button: 0 }, { ...base, target: "results-frame" }, "default"],
+  [{ button: 0, isTrusted: false }, { ...base, target: "_blank" }, "default"],   // a page script's fake click
 ];
 
 for (const [evt, anchor, expected] of cases) {

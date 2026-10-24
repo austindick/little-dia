@@ -2,11 +2,13 @@
 // A classic script (content scripts can't be modules): it publishes its function on globalThis.
 (() => {
   /**
-   * @param evt {{button: number, metaKey?: boolean, ctrlKey?: boolean, shiftKey?: boolean, altKey?: boolean}}
+   * @param evt {{button: number, isTrusted?: boolean, metaKey?: boolean, ctrlKey?: boolean, shiftKey?: boolean, altKey?: boolean}}
    * @param anchor {{href: string, target: string, hasDownload: boolean}} href already absolute
    * @returns {"little" | "default"}
    */
   function classifyClick(evt, anchor) {
+    // Only real clicks: a page script's synthetic click must not open windows (extension windows skip the popup blocker).
+    if (evt.isTrusted === false) return "default";
     let protocol;
     try {
       protocol = new URL(anchor.href).protocol;

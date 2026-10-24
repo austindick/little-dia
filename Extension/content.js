@@ -14,7 +14,7 @@
     const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
     if (!anchor) return;
     const decision = classifyClick(
-      { button: event.button, metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey, altKey: event.altKey },
+      { button: event.button, isTrusted: event.isTrusted, metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey, altKey: event.altKey },
       { href: anchor.href, target: anchor.target, hasDownload: anchor.hasAttribute("download") },
     );
     if (decision !== "little") return;

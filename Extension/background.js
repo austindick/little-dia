@@ -1,6 +1,6 @@
 // Lil Brow Wow service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.lilbrowwow.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, reportedBounds, makeSerial } from "./bridge-logic.js";
 
 const HOST = "com.lilbrowwow.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used when Dia doesn't report window sizes.
@@ -54,10 +54,15 @@ async function getState() {
   return { littleWindows: s.littleWindows ?? {}, lastNormalWindowId: s.lastNormalWindowId ?? null };
 }
 
-async function updateLittleWindows(change) {
-  const { littleWindows } = await getState();
-  change(littleWindows);
-  await chrome.storage.session.set({ littleWindows });
+// Updates run one at a time: windows opened by fast ⌘-clicks would otherwise overwrite each other's entries.
+const serial = makeSerial();
+
+function updateLittleWindows(change) {
+  return serial(async () => {
+    const { littleWindows } = await getState();
+    change(littleWindows);
+    await chrome.storage.session.set({ littleWindows });
+  });
 }
 
 // ---- Little windows ---------------------------------------------------------------------------------------------
