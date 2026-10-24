@@ -23,7 +23,7 @@ public final class UserDefaultsSettings: LittleSettings {
         self.defaults = defaults
         defaults.register(defaults: [
             Key.enabled: true,
-            Key.width: 1000.0,
+            Key.width: 1200.0,
             Key.height: 750.0,
             Key.browser: BrowserAdapter.dia.bundleID,   // chosen by the 2026-10-23 same-desktop spike
         ])
@@ -42,7 +42,7 @@ public final class UserDefaultsSettings: LittleSettings {
         BrowserAdapter.forBundleID(defaults.string(forKey: Key.browser) ?? "") ?? .dia
     }
 
-    /// Little windows open at the size the user last left one at. Bounds are the page area the extension reports.
+    /// Little windows open at the size the user last resized one to (page area, without the browser's title bar).
     public func rememberSize(_ bounds: Bounds) {
         defaults.set(Double(bounds.width), forKey: Key.width)
         defaults.set(Double(bounds.height), forKey: Key.height)

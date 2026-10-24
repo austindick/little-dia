@@ -61,14 +61,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlay = TitleBarOverlay(browserName: settings.browser.name,
                                   onCopy: { [weak self] id in self?.copyURL(ofLittleWindow: id) },
                                   onMove: { [weak self] id in self?.moveToMainWindow(id) })
-        tracker = LittleWindowTracker { [weak self] window in
-            guard let self else { return }
-            if let window {
-                self.overlay.show(window, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
-            } else {
-                self.overlay.hide()
-            }
-        }
+        tracker = LittleWindowTracker(
+            onChange: { [weak self] window in
+                guard let self else { return }
+                if let window {
+                    self.overlay.show(window, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+                } else {
+                    self.overlay.hide()
+                }
+            },
+            onResize: { [weak self] windowId, page in
+                guard let self else { return }
+                self.settings.rememberSize(page)
+                self.logger.notice("little window \(windowId) resized; next ones open at \(page.width)x\(page.height)")
+            })
         moveToMain = MoveToMain(
             sendMove: { [weak self] id in
                 guard let self else { return }

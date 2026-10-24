@@ -64,3 +64,8 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(OverlayVisibility.windowToShow(frontmostPID: 11, browserPID: 10, focusedWindow: 5, tracked: [5]) == nil)
     #expect(OverlayVisibility.windowToShow(frontmostPID: 10, browserPID: 10, focusedWindow: 6, tracked: [5]) == nil)
 }
+
+@Test func pageAreaOfAResizedWindow() {   // Dia's window = page area + ~72pt of title bar and address row above it
+    #expect(ScreenGeometry.pageBounds(ofWindow: CGRect(x: 300, y: 65, width: 1100, height: 872), chromeHeight: 72)
+            == Bounds(left: 300, top: 137, width: 1100, height: 800))
+}

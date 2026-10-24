@@ -30,6 +30,12 @@ public enum ScreenGeometry {
                       width: Int(width), height: Int(height))
     }
 
+    /// The page area of a browser window whose title bar and address row (`chromeHeight`) sit above it.
+    public static func pageBounds(ofWindow frame: CGRect, chromeHeight: CGFloat) -> Bounds {
+        Bounds(left: Int(frame.minX), top: Int(frame.minY + chromeHeight),
+               width: Int(frame.width), height: Int(frame.height - chromeHeight))
+    }
+
     public static func appKitRect(fromTopLeft rect: CGRect, primaryScreenHeight: CGFloat) -> CGRect {
         CGRect(x: rect.minX, y: primaryScreenHeight - rect.maxY, width: rect.width, height: rect.height)
     }

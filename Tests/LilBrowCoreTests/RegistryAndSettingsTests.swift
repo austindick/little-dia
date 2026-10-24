@@ -21,7 +21,7 @@ import Testing
     defer { defaults.removePersistentDomain(forName: suite) }
     let settings = UserDefaultsSettings(defaults: defaults)
     #expect(settings.isEnabled)
-    #expect(settings.littleWindowSize == CGSize(width: 1000, height: 750))
+    #expect(settings.littleWindowSize == CGSize(width: 1200, height: 750))
     #expect(settings.browser == .dia)
     settings.rememberSize(Bounds(left: 0, top: 0, width: 900, height: 700))
     #expect(settings.littleWindowSize == CGSize(width: 900, height: 700))

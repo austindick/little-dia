@@ -18,9 +18,12 @@ final class LittleWindowTracker {
         var frame: CGRect
         /// The window server's number for this window, used to follow it live during drags.
         var windowNumber: CGWindowID?
+        /// Height of the page area (the window minus the browser's title bar and address row).
+        var pageHeight: CGFloat
     }
 
     private let onChange: (TrackedWindow?) -> Void
+    private let onResize: (Int, Bounds) -> Void
     private let logger = Logger(subsystem: "com.lilbrowwow", category: "tracker")
     private var entries: [Int: Entry] = [:]
     private var browserPID: pid_t?
@@ -31,9 +34,13 @@ final class LittleWindowTracker {
     private var mouseWasDown = false
     /// The shown window is being dragged or resized: its buttons are hidden until the mouse is released.
     private var dragging = false
+    /// The shown window as it was when the drag began, to tell a resize from a move.
+    private var dragStart: TrackedWindow?
 
-    init(onChange: @escaping (TrackedWindow?) -> Void) {
+    /// - Parameter onResize: called with the new page-area bounds when the user finishes resizing a little window.
+    init(onChange: @escaping (TrackedWindow?) -> Void, onResize: @escaping (Int, Bounds) -> Void) {
         self.onChange = onChange
+        self.onResize = onResize
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
             workspaceObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -65,7 +72,7 @@ final class LittleWindowTracker {
             let candidates = windows.indices.compactMap { i in frame(of: windows[i]).map { WindowCandidate(id: i, frame: $0) } }
             if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken), let frame = frame(of: windows[index]) {
                 let element = windows[index]
-                entries[windowId] = Entry(element: element, frame: frame)
+                entries[windowId] = Entry(element: element, frame: frame, pageHeight: CGFloat(bounds.height))
                 if let observer {
                     let refcon = Unmanaged.passUnretained(self).toOpaque()
                     for notification in [kAXMovedNotification, kAXResizedNotification, kAXUIElementDestroyedNotification] {
@@ -196,6 +203,7 @@ final class LittleWindowTracker {
         if !mouseDown {
             if dragging {
                 dragging = false
+                noteResize()
                 lastReported = nil
                 recompute()   // reappear where the window ended up
             }
@@ -204,7 +212,20 @@ final class LittleWindowTracker {
         guard !dragging, let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
               let frame = serverInfo(of: number)?.frame, frame != shown.frameTopLeft else { return }
         dragging = true
+        dragStart = shown
         onChange(nil)
+    }
+
+    /// If the drag that just ended changed the window's size, report the new page area.
+    private func noteResize() {
+        guard let start = dragStart, let entry = entries[start.windowId], let number = entry.windowNumber,
+              let end = serverInfo(of: number)?.frame else { return }
+        dragStart = nil
+        guard abs(end.width - start.frameTopLeft.width) > 1 || abs(end.height - start.frameTopLeft.height) > 1 else { return }
+        let chromeHeight = max(0, start.frameTopLeft.height - entry.pageHeight)
+        let page = ScreenGeometry.pageBounds(ofWindow: end, chromeHeight: chromeHeight)
+        entries[start.windowId]?.pageHeight = CGFloat(page.height)
+        onResize(start.windowId, page)
     }
 
     private func serverInfo(of number: CGWindowID) -> (frame: CGRect, onScreen: Bool)? {

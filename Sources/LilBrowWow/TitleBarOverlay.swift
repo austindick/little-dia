@@ -10,8 +10,8 @@ final class TitleBarOverlay {
     static let rightInset: CGFloat = 8
 
     private let panel: NSPanel
-    private let copyButton: NSButton
-    private let moveButton: NSButton
+    private let copyButton: PillButton
+    private let moveButton: PillButton
     private let onCopy: (Int) -> Void
     private let onMove: (Int) -> Void
     private var current: TrackedWindow?
@@ -31,15 +31,14 @@ final class TitleBarOverlay {
         panel.becomesKeyOnlyIfNeeded = true
         panel.isFloatingPanel = true
 
-        copyButton = Self.makeButton(title: "Copy", symbol: "link")
-        moveButton = Self.makeButton(title: browserName, symbol: "arrow.up.forward.app")
+        copyButton = PillButton(title: nil, symbol: "link", label: "Copy link")
+        moveButton = PillButton(title: browserName, symbol: "arrow.up.forward.app", label: "Open in \(browserName)")
         copyButton.toolTip = "Copy this page's URL"
-        moveButton.toolTip = "Open this page in the main \(browserName) window"
+        moveButton.toolTip = "Move this page to the main \(browserName) window"
 
         let stack = NSStackView(views: [copyButton, moveButton])
         stack.orientation = .horizontal
         stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         panel.contentView = stack
         panel.setContentSize(stack.fittingSize)
 
@@ -75,11 +74,11 @@ final class TitleBarOverlay {
 
     var isVisible: Bool { panel.isVisible }
 
-    /// Shows "Copied" on the Copy button for a moment.
+    /// Swaps the link icon for a checkmark for a moment.
     func flashCopied() {
         copiedReset?.cancel()
-        copyButton.title = "Copied"
-        let reset = DispatchWorkItem { [weak self] in self?.copyButton.title = "Copy" }
+        copyButton.setSymbol("checkmark")
+        let reset = DispatchWorkItem { [weak self] in self?.copyButton.setSymbol("link") }
         copiedReset = reset
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: reset)
     }
@@ -91,15 +90,66 @@ final class TitleBarOverlay {
     @objc private func moveClicked() {
         if let id = current?.windowId { onMove(id) }
     }
+}
 
-    private static func makeButton(title: String, symbol: String) -> NSButton {
-        let button = NSButton(title: title, image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(),
-                              target: nil, action: nil)
-        button.imagePosition = .imageLeading
-        button.bezelStyle = .accessoryBarAction
-        button.controlSize = .small
-        button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        button.setButtonType(.momentaryPushIn)
-        return button
+/// A small borderless button with a soft, semi-transparent rounded fill that darkens on hover and press.
+private final class PillButton: NSButton {
+    static let height: CGFloat = 22
+    private var hovering = false { didSet { updateFill() } }
+
+    init(title: String?, symbol: String, label: String) {
+        super.init(frame: .zero)
+        self.title = title ?? ""
+        isBordered = false
+        setButtonType(.momentaryChange)
+        imagePosition = title == nil ? .imageOnly : .imageLeading
+        imageHugsTitle = true
+        font = .systemFont(ofSize: 12, weight: .medium)
+        contentTintColor = .labelColor
+        setAccessibilityLabel(label)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        setSymbol(symbol)
+        updateFill()
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    func setSymbol(_ name: String) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration)
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let content = super.intrinsicContentSize
+        let width = title.isEmpty ? Self.height + 4 : content.width + 16
+        return NSSize(width: max(width, Self.height), height: Self.height)
+    }
+
+    override var isHighlighted: Bool {
+        didSet { updateFill() }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateFill()
+    }
+
+    private func updateFill() {
+        let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
+        var color: CGColor?
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            color = NSColor.labelColor.withAlphaComponent(alpha).cgColor
+        }
+        layer?.backgroundColor = color
     }
 }
