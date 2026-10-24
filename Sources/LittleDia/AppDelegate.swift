@@ -81,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.focusReturn.appActivated(app) }
         }
         overlay = TitleBarOverlay(browserName: settings.browser.name,
+                                  titleBarColor: settings.browser.titleBarColor.map { NSColor($0) } ?? .windowBackgroundColor,
                                   onCopy: { [weak self] id in self?.copyURL(ofLittleWindow: id) },
                                   onMove: { [weak self] id in self?.moveToMainWindow(id) },
                                   onSendToProfile: { [weak self] id, profile in self?.send(id, toProfile: profile) })

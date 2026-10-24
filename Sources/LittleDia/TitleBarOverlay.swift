@@ -5,7 +5,7 @@ import LittleDiaCore
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
 /// With more than one browser profile, the Move button splits: "↗ Work" moves the page live, and "▾" offers the
 /// other profiles.
-/// A click-through backdrop sits just below the buttons: frosted title-bar material that fades in from the left, so a
+/// A click-through backdrop sits just below the buttons: the title bar's own colour, fading in from the left, so a
 /// long page title fades out before the buttons instead of running under them.
 @MainActor
 final class TitleBarOverlay {
@@ -29,7 +29,7 @@ final class TitleBarOverlay {
     private var current: TrackedWindow?
     private var copiedReset: DispatchWorkItem?
 
-    init(browserName: String, onCopy: @escaping (Int) -> Void, onMove: @escaping (Int) -> Void,
+    init(browserName: String, titleBarColor: NSColor, onCopy: @escaping (Int) -> Void, onMove: @escaping (Int) -> Void,
          onSendToProfile: @escaping (Int, String) -> Void) {
         self.browserName = browserName
         self.onCopy = onCopy
@@ -40,12 +40,8 @@ final class TitleBarOverlay {
         backdrop = Self.makePanel()
         // The fade strip lies over Dia's title bar, which must stay draggable and clickable.
         backdrop.ignoresMouseEvents = true
-        let material = NSVisualEffectView()
-        material.material = .titlebar
-        material.blendingMode = .behindWindow
-        material.state = .active
-        material.maskImage = Self.backdropMask(cornerRadius: Self.windowCornerRadius - Self.rightInset)
-        backdrop.contentView = material
+        backdrop.contentView = BackdropView(color: titleBarColor, fadeWidth: Self.fadeWidth,
+                                            cornerRadius: Self.windowCornerRadius - Self.rightInset)
 
         stack.orientation = .horizontal
         stack.spacing = 4
@@ -66,27 +62,6 @@ final class TitleBarOverlay {
         // Disappear instantly when hidden (drag/resize); the fade-in on show is done by hand.
         panel.animationBehavior = .none
         return panel
-    }
-
-    /// Opaque where the buttons are (rounded on the right like the rightmost button), fading to clear over
-    /// `fadeWidth` on the left. The caps keep the fade and the corners fixed while the middle stretches.
-    private static func backdropMask(cornerRadius: CGFloat) -> NSImage {
-        let height = PillButton.height
-        let size = NSSize(width: fadeWidth + 2 * cornerRadius + 1, height: height)
-        let image = NSImage(size: size, flipped: false) { rect in
-            NSColor.black.setFill()
-            // Solid from the end of the fade to the rounded right end.
-            NSRect(x: fadeWidth, y: 0, width: rect.width - fadeWidth - cornerRadius, height: rect.height).fill()
-            // Right end: rounded like the rightmost button.
-            NSBezierPath(roundedRect: NSRect(x: rect.width - 2 * cornerRadius, y: 0, width: 2 * cornerRadius, height: rect.height),
-                         xRadius: cornerRadius, yRadius: cornerRadius).fill()
-            // Left end: a horizontal fade from clear to opaque.
-            NSGradient(starting: .clear, ending: .black)?.draw(in: NSRect(x: 0, y: 0, width: fadeWidth, height: rect.height), angle: 0)
-            return true
-        }
-        image.capInsets = NSEdgeInsets(top: 0, left: fadeWidth, bottom: 0, right: cornerRadius)
-        image.resizingMode = .stretch
-        return image
     }
 
         /// Rebuilds the buttons for the browser's profiles (nil: unknown, a plain Move button labeled with the browser).
@@ -205,6 +180,49 @@ private final class MenuAction: NSMenuItem {
     required init(coder: NSCoder) { fatalError("not used") }
 
     @objc private func run() { handler() }
+}
+
+/// Solid `color` under the buttons, rounded on the right like the rightmost button, fading to clear over `fadeWidth`
+/// on the left.
+private final class BackdropView: NSView {
+    private let color: NSColor
+    private let fadeWidth: CGFloat
+    private let cornerRadius: CGFloat
+
+    init(color: NSColor, fadeWidth: CGFloat, cornerRadius: CGFloat) {
+        self.color = color
+        self.fadeWidth = fadeWidth
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        // Resolved while drawing, so a colour that follows light and dark mode uses this view's appearance.
+        let solid = color.usingColorSpace(.sRGB) ?? color
+        solid.setFill()
+        NSRect(x: fadeWidth, y: 0, width: bounds.width - fadeWidth - cornerRadius, height: bounds.height).fill()
+        NSBezierPath(roundedRect: NSRect(x: bounds.width - 2 * cornerRadius, y: 0, width: 2 * cornerRadius, height: bounds.height),
+                     xRadius: cornerRadius, yRadius: cornerRadius).fill()
+        NSGradient(starting: solid.withAlphaComponent(0), ending: solid)?
+            .draw(in: NSRect(x: 0, y: 0, width: fadeWidth, height: bounds.height), angle: 0)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
+extension NSColor {
+    /// A colour that follows the light or dark appearance of whatever draws it.
+    convenience init(_ color: AppearanceColor) {
+        self.init(name: nil) { appearance in
+            let rgb = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? color.dark : color.light
+            return NSColor(srgbRed: CGFloat(rgb.red) / 255, green: CGFloat(rgb.green) / 255, blue: CGFloat(rgb.blue) / 255, alpha: 1)
+        }
+    }
 }
 
 /// A small borderless button, optionally with a soft, semi-transparent fill that darkens on hover and press.

@@ -13,15 +13,18 @@ public struct BrowserAdapter: Equatable, Sendable {
     public let userDataDirectory: String?
     /// Code-signing requirement the browser's running process must meet before its helper may connect.
     public let codeRequirement: String?
+    /// The colour of a popup's title bar, which the title-bar buttons' backdrop must match.
+    public let titleBarColor: AppearanceColor?
 
     public init(name: String, bundleID: String, nativeHostDirectories: [String], chromeHeight: CGFloat = 0,
-                userDataDirectory: String? = nil, codeRequirement: String? = nil) {
+                userDataDirectory: String? = nil, codeRequirement: String? = nil, titleBarColor: AppearanceColor? = nil) {
         self.name = name
         self.bundleID = bundleID
         self.nativeHostDirectories = nativeHostDirectories
         self.chromeHeight = chromeHeight
         self.userDataDirectory = userDataDirectory
         self.codeRequirement = codeRequirement
+        self.titleBarColor = titleBarColor
     }
 
     /// Dia's folder is reported as both of these; installing to both settles which one it reads.
@@ -30,13 +33,40 @@ public struct BrowserAdapter: Equatable, Sendable {
                                            chromeHeight: 72,   // measured 2026-10-23
                                            userDataDirectory: "Dia/User Data",
                                            // Dia's own designated requirement, narrowed to The Browser Company's team.
-                                           codeRequirement: #"anchor apple generic and identifier "company.thebrowser.dia" and certificate leaf[subject.OU] = "S6N382Y83G""#)
+                                           codeRequirement: #"anchor apple generic and identifier "company.thebrowser.dia" and certificate leaf[subject.OU] = "S6N382Y83G""#,
+                                           // Light measured 2026-10-24. Dark is estimated from Dia's window colours until measured.
+                                           titleBarColor: AppearanceColor(light: RGBColor(red: 255, green: 255, blue: 255),
+                                                                          dark: RGBColor(red: 22, green: 21, blue: 23)))
     public static let chrome = BrowserAdapter(name: "Chrome", bundleID: "com.google.Chrome",
                                               nativeHostDirectories: ["Google/Chrome/NativeMessagingHosts"])
     public static let all: [BrowserAdapter] = [.dia, .chrome]
 
     public static func forBundleID(_ bundleID: String) -> BrowserAdapter? {
         all.first { $0.bundleID == bundleID }
+    }
+}
+
+/// An sRGB colour, 0–255 per channel.
+public struct RGBColor: Equatable, Sendable {
+    public let red: UInt8
+    public let green: UInt8
+    public let blue: UInt8
+
+    public init(red: UInt8, green: UInt8, blue: UInt8) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+}
+
+/// A colour that differs between light and dark mode.
+public struct AppearanceColor: Equatable, Sendable {
+    public let light: RGBColor
+    public let dark: RGBColor
+
+    public init(light: RGBColor, dark: RGBColor) {
+        self.light = light
+        self.dark = dark
     }
 }
 

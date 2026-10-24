@@ -24,6 +24,11 @@ import Testing
     #expect(plist["CFBundleExecutable"] as? String == "LittleDia")
 }
 
+/// The buttons' backdrop is drawn in this colour; anything else shows as a box behind them (owner's report, 2026-10-24).
+@Test func diaTitleBarIsWhiteInLightMode() {   // measured from a screenshot of a little window
+    #expect(BrowserAdapter.dia.titleBarColor?.light == RGBColor(red: 255, green: 255, blue: 255))
+}
+
 @Test func manifestJSONHasRequiredFields() throws {
     let json = try JSONSerialization.jsonObject(with: NativeHostManifest.json(hostExecutablePath: "/x/littledia-host")) as! [String: Any]
     #expect(json["name"] as? String == "com.austindick.littledia.bridge")
