@@ -22,6 +22,8 @@ final class LittleWindowTracker {
         var pageHeight: CGFloat
         /// The window has finished animating open; until then its buttons stay hidden so they don't jump around.
         var settled = false
+        /// The width the window was opened at. Dia's open animation overshoots it slightly before settling.
+        var expectedWidth: CGFloat
     }
 
     private let onChange: (TrackedWindow?) -> Void
@@ -77,7 +79,8 @@ final class LittleWindowTracker {
             if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused),
                let frame = frame(of: windows[index]) {
                 let element = windows[index]
-                entries[windowId] = Entry(element: element, frame: frame, pageHeight: CGFloat(bounds.height))
+                entries[windowId] = Entry(element: element, frame: frame, pageHeight: CGFloat(bounds.height),
+                                          expectedWidth: CGFloat(bounds.width))
                 if let observer {
                     let refcon = Unmanaged.passUnretained(self).toOpaque()
                     for notification in [kAXMovedNotification, kAXResizedNotification, kAXUIElementDestroyedNotification] {
@@ -109,7 +112,8 @@ final class LittleWindowTracker {
             let number = entry.windowNumber ?? browserPID.flatMap { onThisDesktop(entry.frame, pid: $0) }
             if let number { entries[windowId]?.windowNumber = number }
             let frame = number.flatMap { serverInfo(of: $0)?.frame }
-            if let frame, frame == last { return }
+            // Settled: back at the requested width (not mid-overshoot) and unchanged since the last reading.
+            if let frame, frame == last, abs(frame.width - entry.expectedWidth) < 0.5 { return }
             last = frame
             try? await Task.sleep(for: .milliseconds(30))
         }
