@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tracker: LittleWindowTracker!
     private var overlay: TitleBarOverlay!
     private var moveToMain: MoveToMain!
+    private var sendToProfile: SendToProfile!
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -29,7 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server = BridgeServer(socketPath: ownFolder.appendingPathComponent("bridge.sock").path)
         link = BridgeExtensionLink(server: server)
         link.onEvent = { [weak self] message, bundleID in self?.handle(message, from: bundleID) }
-        link.onConnectionsChanged = { [weak self] in self?.statusMenu?.refresh() }
+        link.onConnectionsChanged = { [weak self] in
+            self?.statusMenu?.refresh()
+            self?.reloadProfiles()
+        }
         do {
             try server.start()
         } catch {
@@ -61,7 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         overlay = TitleBarOverlay(browserName: settings.browser.name,
                                   onCopy: { [weak self] id in self?.copyURL(ofLittleWindow: id) },
-                                  onMove: { [weak self] id in self?.moveToMainWindow(id) })
+                                  onMove: { [weak self] id in self?.moveToMainWindow(id) },
+                                  onSendToProfile: { [weak self] id, profile in self?.send(id, toProfile: profile) })
         tracker = LittleWindowTracker(
             onChange: { [weak self] window in
                 guard let self else { return }
@@ -90,6 +95,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
             })
+        sendToProfile = SendToProfile(
+            urlOf: { [weak self] id in self?.registry.info(for: id)?.url },
+            forget: { [weak self] id in self?.focusReturn.forget(id) },
+            closeNatively: { [weak self] id in self?.tracker.close(windowId: id) ?? false },
+            closeViaExtension: { [weak self] id in
+                guard let self else { return }
+                self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
+            },
+            openInProfile: { [weak self] url, profile in
+                await self?.runAppleScript(DiaScript.openInProfile(url: url, profile: profile)) ?? false
+            },
+            openNormally: { [weak self] url in
+                guard let self, let parsed = URL(string: url) else { return }
+                self.browserControl.openNormally(parsed, bundleID: self.settings.browser.bundleID)
+            })
+        reloadProfiles()
         installNativeHostManifests(applicationSupport: applicationSupport)
         statusMenu = StatusMenu(settings: settings, link: link)
     }
@@ -147,6 +168,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url, forType: .string)
         if overlay.isVisible { overlay.flashCopied() }
+    }
+
+    private func send(_ windowId: Int, toProfile profile: String) {
+        overlay.hide()
+        tracker.untrack(windowId: windowId)
+        Task { await sendToProfile.send(windowId: windowId, to: profile) }
+    }
+
+    /// Profile names for the Move button, read from the browser's files (they can change while the app runs).
+    private func reloadProfiles() {
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let profiles = settings.browser.userDataDirectory.flatMap {
+            BrowserProfiles.load(userDataDirectory: applicationSupport.appendingPathComponent($0))
+        }
+        logger.notice("profiles: current=\(profiles?.current ?? "unknown", privacy: .public) others=\(profiles?.others.joined(separator: ", ") ?? "", privacy: .public)")
+        overlay.setProfiles(profiles)
+    }
+
+    /// Runs an AppleScript with `osascript`, so the main thread stays free (the first run may wait on the
+    /// "Lil Brow Wow wants to control Dia" permission prompt).
+    private func runAppleScript(_ source: String) async -> Bool {
+        let logger = self.logger
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", source]
+            let errors = Pipe()
+            process.standardError = errors
+            process.standardOutput = Pipe()
+            process.terminationHandler = { finished in
+                let ok = finished.terminationStatus == 0
+                if !ok {
+                    let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                    logger.error("AppleScript failed: \(message, privacy: .public)")
+                }
+                continuation.resume(returning: ok)
+            }
+            do {
+                try process.run()
+            } catch {
+                logger.error("could not run osascript: \(error.localizedDescription, privacy: .public)")
+                continuation.resume(returning: false)
+            }
+        }
     }
 
     private func moveToMainWindow(_ windowId: Int) {

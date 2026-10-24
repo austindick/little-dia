@@ -12,6 +12,7 @@
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>Lil Brow Wow asks Dia to open a page in another of your profiles when you choose one from the little window.</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>

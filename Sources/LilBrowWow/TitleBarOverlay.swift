@@ -3,24 +3,32 @@ import LilBrowCore
 
 /// The Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
+/// With more than one browser profile, the Move button splits: "↗ Work" moves the page live, and "▾" offers the
+/// other profiles.
 @MainActor
 final class TitleBarOverlay {
     /// Gap above and to the right of the buttons, inside the window's top-right corner.
     static let inset: CGFloat = 5
-    /// Dia's popup window corner radius (estimated); the Move button's top-right corner nests inside it.
+    /// Dia's popup window corner radius (estimated); the rightmost button's top-right corner nests inside it.
     static let windowCornerRadius: CGFloat = 16
 
     private let panel: NSPanel
-    private let copyButton: PillButton
-    private let moveButton: PillButton
+    private let stack = NSStackView()
+    private let browserName: String
     private let onCopy: (Int) -> Void
     private let onMove: (Int) -> Void
+    private let onSendToProfile: (Int, String) -> Void
+    private var copyButton: PillButton!
+    private var otherProfiles: [String] = []
     private var current: TrackedWindow?
     private var copiedReset: DispatchWorkItem?
 
-    init(browserName: String, onCopy: @escaping (Int) -> Void, onMove: @escaping (Int) -> Void) {
+    init(browserName: String, onCopy: @escaping (Int) -> Void, onMove: @escaping (Int) -> Void,
+         onSendToProfile: @escaping (Int, String) -> Void) {
+        self.browserName = browserName
         self.onCopy = onCopy
         self.onMove = onMove
+        self.onSendToProfile = onSendToProfile
 
         panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         panel.level = .floating
@@ -34,27 +42,50 @@ final class TitleBarOverlay {
         // Disappear instantly when hidden (drag/resize); the fade-in on show is done by hand.
         panel.animationBehavior = .none
 
-        copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
-        moveButton = PillButton(title: browserName, symbol: "arrow.up.forward.app", label: "Open in \(browserName)",
-                                topRightRadius: Self.windowCornerRadius - Self.inset)
-        copyButton.toolTip = "Copy this page's URL"
-        moveButton.toolTip = "Move this page to the main \(browserName) window"
-
-        let stack = NSStackView(views: [copyButton, moveButton])
         stack.orientation = .horizontal
         stack.spacing = 4
         panel.contentView = stack
-        panel.setContentSize(stack.fittingSize)
+        setProfiles(nil)
+    }
 
+    /// Rebuilds the buttons for the browser's profiles (nil: unknown, a plain Move button labeled with the browser).
+    func setProfiles(_ profiles: BrowserProfiles?) {
+        otherProfiles = profiles?.others ?? []
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+
+        copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
+        copyButton.toolTip = "Copy this page's URL"
         copyButton.target = self
         copyButton.action = #selector(copyClicked)
-        moveButton.target = self
-        moveButton.action = #selector(moveClicked)
+        stack.addArrangedSubview(copyButton)
+
+        let nest = Self.windowCornerRadius - Self.inset
+        let destination = profiles?.current ?? browserName
+        let split = !otherProfiles.isEmpty
+        let move = PillButton(title: destination, symbol: "arrow.up.forward.app", label: "Move to \(destination)",
+                              corners: split ? .init(topLeft: 6, topRight: 0, bottomRight: 0, bottomLeft: 6)
+                                             : .init(topLeft: 6, topRight: nest, bottomRight: 6, bottomLeft: 6))
+        move.toolTip = "Move this page to the main \(browserName) window"
+        move.target = self
+        move.action = #selector(moveClicked)
+        stack.addArrangedSubview(move)
+
+        if split {
+            let chevron = PillButton(title: nil, symbol: "chevron.down", label: "Send to another profile", width: 20,
+                                     corners: .init(topLeft: 0, topRight: nest, bottomRight: 6, bottomLeft: 0))
+            chevron.toolTip = "Send this page to another profile"
+            chevron.target = self
+            chevron.action = #selector(chevronClicked(_:))
+            stack.setCustomSpacing(1, after: move)
+            stack.addArrangedSubview(chevron)
+        }
+        panel.setContentSize(stack.fittingSize)
+        if let current, panel.isVisible { show(current, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0) }
     }
 
     func show(_ window: TrackedWindow, primaryScreenHeight: CGFloat) {
         current = window
-        let size = panel.contentView?.fittingSize ?? panel.frame.size
+        let size = stack.fittingSize
         let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size, inset: Self.inset)
         let wasHidden = !panel.isVisible
         panel.setFrame(ScreenGeometry.appKitRect(fromTopLeft: topLeft, primaryScreenHeight: primaryScreenHeight), display: true)
@@ -94,20 +125,51 @@ final class TitleBarOverlay {
     @objc private func moveClicked() {
         if let id = current?.windowId { onMove(id) }
     }
+
+    @objc private func chevronClicked(_ sender: NSButton) {
+        guard let id = current?.windowId else { return }
+        let menu = NSMenu()
+        for profile in otherProfiles {
+            let item = MenuAction(title: "Send to \(profile)") { [weak self] in self?.onSendToProfile(id, profile) }
+            menu.addItem(item)
+        }
+        let below = NSPoint(x: 0, y: sender.isFlipped ? sender.bounds.maxY + 4 : -4)
+        menu.popUp(positioning: nil, at: below, in: sender)
+    }
 }
 
-/// A small borderless button, optionally with a soft, semi-transparent rounded fill that darkens on hover and press.
+private final class MenuAction: NSMenuItem {
+    private let handler: () -> Void
+
+    init(title: String, handler: @escaping () -> Void) {
+        self.handler = handler
+        super.init(title: title, action: #selector(run), keyEquivalent: "")
+        target = self
+    }
+
+    required init(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func run() { handler() }
+}
+
+/// A small borderless button, optionally with a soft, semi-transparent fill that darkens on hover and press.
 /// The fill is drawn here rather than set on the button's layer, which AppKit manages itself.
 private final class PillButton: NSButton {
+    struct Corners {
+        var topLeft: CGFloat, topRight: CGFloat, bottomRight: CGFloat, bottomLeft: CGFloat
+        static let standard = Corners(topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6)
+    }
+
     static let height: CGFloat = 23
-    static let cornerRadius: CGFloat = 6
     private let filled: Bool
-    private let topRightRadius: CGFloat
+    private let corners: Corners
+    private let fixedWidth: CGFloat?
     private var hovering = false { didSet { needsDisplay = true } }
 
-    init(title: String?, symbol: String, label: String, filled: Bool = true, topRightRadius: CGFloat? = nil) {
+    init(title: String?, symbol: String, label: String, filled: Bool = true, width: CGFloat? = nil, corners: Corners = .standard) {
         self.filled = filled
-        self.topRightRadius = topRightRadius ?? Self.cornerRadius
+        self.corners = corners
+        self.fixedWidth = width
         super.init(frame: .zero)
         self.title = title ?? ""
         isBordered = false
@@ -128,9 +190,9 @@ private final class PillButton: NSButton {
     }
 
     override var intrinsicContentSize: NSSize {
-        let content = super.intrinsicContentSize
-        // Icon-only buttons have no fill, so a little extra width is invisible and makes a bigger click target.
-        let width = title.isEmpty ? Self.height + 4 : content.width + 16
+        if let fixedWidth { return NSSize(width: fixedWidth, height: Self.height) }
+        // Icon-only buttons are unfilled, so a little extra width is invisible and makes a bigger click target.
+        let width = title.isEmpty ? Self.height + 4 : super.intrinsicContentSize.width + 16
         return NSSize(width: max(width, Self.height), height: Self.height)
     }
 
@@ -147,26 +209,30 @@ private final class PillButton: NSButton {
         super.draw(dirtyRect)
     }
 
-    /// A rounded rectangle whose top-right corner can be rounder than the rest.
+    /// A rectangle with its own radius at each corner.
     private func fillPath() -> NSBezierPath {
-        let r = bounds, small = Self.cornerRadius, big = min(topRightRadius, r.height / 2)
+        let r = bounds
+        let cap = r.height / 2
+        let tl = min(corners.topLeft, cap), tr = min(corners.topRight, cap)
+        let br = min(corners.bottomRight, cap), bl = min(corners.bottomLeft, cap)
         // In a flipped view the top edge is at minY.
         let top = isFlipped ? r.minY : r.maxY, bottom = isFlipped ? r.maxY : r.minY
-        let down: CGFloat = isFlipped ? 1 : -1   // direction from the top edge toward the bottom
+        let down: CGFloat = isFlipped ? 1 : -1   // from the top edge toward the bottom
+        let k: CGFloat = 0.45                    // control-point factor for soft corners
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: r.minX + small, y: top))
-        path.line(to: NSPoint(x: r.maxX - big, y: top))
-        path.curve(to: NSPoint(x: r.maxX, y: top + down * big),
-                   controlPoint1: NSPoint(x: r.maxX - big * 0.45, y: top), controlPoint2: NSPoint(x: r.maxX, y: top + down * big * 0.55))
-        path.line(to: NSPoint(x: r.maxX, y: bottom - down * small))
-        path.curve(to: NSPoint(x: r.maxX - small, y: bottom),
-                   controlPoint1: NSPoint(x: r.maxX, y: bottom - down * small * 0.45), controlPoint2: NSPoint(x: r.maxX - small * 0.55, y: bottom))
-        path.line(to: NSPoint(x: r.minX + small, y: bottom))
-        path.curve(to: NSPoint(x: r.minX, y: bottom - down * small),
-                   controlPoint1: NSPoint(x: r.minX + small * 0.45, y: bottom), controlPoint2: NSPoint(x: r.minX, y: bottom - down * small * 0.55))
-        path.line(to: NSPoint(x: r.minX, y: top + down * small))
-        path.curve(to: NSPoint(x: r.minX + small, y: top),
-                   controlPoint1: NSPoint(x: r.minX, y: top + down * small * 0.45), controlPoint2: NSPoint(x: r.minX + small * 0.55, y: top))
+        path.move(to: NSPoint(x: r.minX + tl, y: top))
+        path.line(to: NSPoint(x: r.maxX - tr, y: top))
+        path.curve(to: NSPoint(x: r.maxX, y: top + down * tr),
+                   controlPoint1: NSPoint(x: r.maxX - tr * k, y: top), controlPoint2: NSPoint(x: r.maxX, y: top + down * tr * (1 - k)))
+        path.line(to: NSPoint(x: r.maxX, y: bottom - down * br))
+        path.curve(to: NSPoint(x: r.maxX - br, y: bottom),
+                   controlPoint1: NSPoint(x: r.maxX, y: bottom - down * br * k), controlPoint2: NSPoint(x: r.maxX - br * (1 - k), y: bottom))
+        path.line(to: NSPoint(x: r.minX + bl, y: bottom))
+        path.curve(to: NSPoint(x: r.minX, y: bottom - down * bl),
+                   controlPoint1: NSPoint(x: r.minX + bl * k, y: bottom), controlPoint2: NSPoint(x: r.minX, y: bottom - down * bl * (1 - k)))
+        path.line(to: NSPoint(x: r.minX, y: top + down * tl))
+        path.curve(to: NSPoint(x: r.minX + tl, y: top),
+                   controlPoint1: NSPoint(x: r.minX, y: top + down * tl * k), controlPoint2: NSPoint(x: r.minX + tl * (1 - k), y: top))
         path.close()
         return path
     }
