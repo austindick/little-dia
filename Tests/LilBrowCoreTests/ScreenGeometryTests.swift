@@ -33,8 +33,8 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
 
 @Test func overlaySitsInTheTitleBarsTopRightCorner() {
     #expect(ScreenGeometry.overlayFrame(windowTopLeft: CGRect(x: 300, y: 137, width: 1000, height: 750), overlaySize: CGSize(width: 120, height: 23),
-                                        topInset: 5, rightInset: 6)
-            == CGRect(x: 1174, y: 142, width: 120, height: 23))
+                                        topInset: 5, rightInset: 5)
+            == CGRect(x: 1175, y: 142, width: 120, height: 23))
 }
 
 @Test func overlaySizeIsRoundedUpSoNothingIsClipped() {   // the panel's width would otherwise round down

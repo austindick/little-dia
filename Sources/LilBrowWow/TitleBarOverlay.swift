@@ -9,7 +9,7 @@ import LilBrowCore
 final class TitleBarOverlay {
     /// Gaps above and to the right of the buttons, inside the window's top-right corner.
     static let topInset: CGFloat = 5
-    static let rightInset: CGFloat = 6
+    static let rightInset: CGFloat = 5
     /// Dia's popup window corner radius (estimated); the rightmost button's top-right corner nests inside it.
     static let windowCornerRadius: CGFloat = 16
 
@@ -204,6 +204,11 @@ private final class PillButton: NSButton {
     override var isHighlighted: Bool {
         didSet { needsDisplay = true }
     }
+
+    /// AppKit gives icon-only buttons alignment insets taken from the symbol's shape, which made the chevron half a
+    /// point shorter and half a point wider than laid out (so its right edge was clipped). These buttons are laid out
+    /// by their full frame.
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsetsZero }
 
     override func draw(_ dirtyRect: NSRect) {
         if filled {
