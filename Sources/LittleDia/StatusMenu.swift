@@ -9,15 +9,22 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let status: () -> SetupStatus
     private let showSetup: () -> Void
     private let copyDiagnostics: () -> Void
+    private let updateOffer: () -> UpdateOffer?
+    private let checkForUpdates: () -> Void
+    private let installUpdate: (UpdateOffer) -> Void
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
     init(settings: UserDefaultsSettings, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
-         copyDiagnostics: @escaping () -> Void) {
+         copyDiagnostics: @escaping () -> Void, updateOffer: @escaping () -> UpdateOffer?,
+         checkForUpdates: @escaping () -> Void, installUpdate: @escaping (UpdateOffer) -> Void) {
         self.settings = settings
         self.status = status
         self.showSetup = showSetup
         self.copyDiagnostics = copyDiagnostics
+        self.updateOffer = updateOffer
+        self.checkForUpdates = checkForUpdates
+        self.installUpdate = installUpdate
         super.init()
         let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "Little Dia")
         image?.isTemplate = true
@@ -53,6 +60,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(action("Setup…", showSetup))
         menu.addItem(.separator())
 
+        if let offer = updateOffer() {
+            menu.addItem(action("Update to \(offer.version)…") { [weak self] in self?.installUpdate(offer) })
+        } else {
+            menu.addItem(action("Check for Updates…", checkForUpdates))
+        }
         menu.addItem(action("Copy Diagnostics", copyDiagnostics))
         menu.addItem(action("About Little Dia", Self.showAbout))
         menu.addItem(.separator())

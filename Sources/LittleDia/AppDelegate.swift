@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastExtensionVersion: String?
     private var reloadPolicy = ExtensionReloadPolicy()
     private var setupWindow: SetupWindowController?
+    private var updater: Updater!
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -133,10 +134,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             })
         reloadProfiles()
         installNativeHostManifests(applicationSupport: applicationSupport)
+        updater = Updater(settings: settings)
         statusMenu = StatusMenu(settings: settings,
                                 status: { [weak self] in self?.setupStatus() ?? .unknown },
                                 showSetup: { [weak self] in self?.showSetup() },
-                                copyDiagnostics: { [weak self] in self?.copyDiagnostics() })
+                                copyDiagnostics: { [weak self] in self?.copyDiagnostics() },
+                                updateOffer: { [weak self] in self?.updater.offer },
+                                checkForUpdates: { [weak self] in Task { await self?.updater.check(userInitiated: true) } },
+                                installUpdate: { [weak self] offer in Task { await self?.updater.install(offer) } })
+        updater.onChange = { [weak self] in self?.statusMenu?.refresh() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -144,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SystemIntegration.launchAtLogin = true
             settings.hasLaunchedBefore = true
         }
+        updater.startAutomaticChecks()
         // Open the setup window if a step is unfinished. When Dia is running, give its extension time to connect
         // first, so a set-up Mac doesn't flash the window on every launch: a few seconds normally, and up to a minute
         // more (the extension's reconnect alarm) when Dia's files show the extension is installed.

@@ -19,6 +19,7 @@ public final class UserDefaultsSettings: LittleSettings {
         static let browser = "browserBundleID"
         static let chromeHeight = "chromeHeight"
         static let hasLaunchedBefore = "hasLaunchedBefore"
+        static let lastUpdateCheck = "lastUpdateCheck"
     }
 
     private let defaults: UserDefaults
@@ -50,6 +51,12 @@ public final class UserDefaultsSettings: LittleSettings {
     public var hasLaunchedBefore: Bool {
         get { defaults.bool(forKey: Key.hasLaunchedBefore) }
         set { defaults.set(newValue, forKey: Key.hasLaunchedBefore) }
+    }
+
+    /// When GitHub was last asked for a newer release.
+    public var lastUpdateCheck: Date? {
+        get { defaults.object(forKey: Key.lastUpdateCheck) as? Date }
+        set { defaults.set(newValue, forKey: Key.lastUpdateCheck) }
     }
 
     public var chromeHeight: CGFloat {
