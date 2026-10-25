@@ -6,7 +6,8 @@ lives. You stay signed in, because it really is Dia.
 
 ![A little Dia window, with Little Dia's Copy and Open in Work buttons at the right of its title bar](docs/images/little-window.png)
 
-Arc stops working on December 22, 2026; this keeps the one Arc feature Dia doesn't have.
+Arc stops working on December 22, 2026; this keeps the one Arc feature Dia doesn't have. It's a side project,
+maintained when I can.
 
 ## Install
 
@@ -68,7 +69,8 @@ Then:
 ## Troubleshooting
 
 - **The menu's status line names the problem.** Click it to open the setup window.
-- **Something's off?** Choose *Copy Diagnostics* and paste it into a message to whoever shared Little Dia with you.
+- **Something's off?** Choose *Copy Diagnostics* and paste it into a [GitHub issue](https://github.com/austindick/little-dia/issues)
+  (or a message to whoever shared Little Dia with you).
   It has versions, setup status and recent log lines; web addresses are left out.
 - **"Dia extension not connected":** in Dia's `chrome://extensions`, check that Little Dia is turned on, and that it was
   loaded from `~/Library/Application Support/Little Dia/Extension`. Then click its reload icon.
@@ -84,7 +86,7 @@ Then:
 - **Briefly drawn behind:** a new little window can appear behind the current app for a few hundredths of a second
   before coming forward.
 - **Buttons hide while you drag or resize** a little window, and come back when you let go.
-- **Dia only.** Dia's app contains an unreleased "Little Browser", so Dia may ship its own version of this one day.
+- **Dia only.** It's built around Dia's windows and extensions, so other browsers aren't supported.
 
 ## How it works
 
