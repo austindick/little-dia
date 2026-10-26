@@ -4,7 +4,7 @@ import LittleDiaCore
 /// The Back, Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
 /// With more than one browser profile, the Move button splits: "↗ Work" moves the page live, and "▾" offers the
-/// other profiles. Back shows only while the page has somewhere to go back to.
+/// other profiles. Back is dimmed while the page has nowhere to go back to.
 /// A click-through backdrop sits just below the buttons: the title bar's own colour, fading in from the left, so a
 /// long page title fades out before the buttons instead of running under them.
 @MainActor
@@ -78,7 +78,7 @@ final class TitleBarOverlay {
         backButton.toolTip = "Go back"
         backButton.target = self
         backButton.action = #selector(backClicked)
-        backButton.isHidden = !canGoBack
+        backButton.isEnabled = canGoBack
         stack.addArrangedSubview(backButton)
 
         copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
@@ -111,17 +111,17 @@ final class TitleBarOverlay {
         if let current, panel.isVisible { show(current, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0) }
     }
 
-    /// Shows or hides Back for the little window the buttons are on; other windows' changes wait until they're shown.
+    /// Enables or dims Back for the little window the buttons are on; other windows' changes wait until they're shown.
     func setCanGoBack(_ canGoBack: Bool, windowId: Int) {
-        guard let current, current.windowId == windowId, panel.isVisible, canGoBack != self.canGoBack else { return }
-        show(current, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+        guard current?.windowId == windowId else { return }
+        self.canGoBack = canGoBack
+        backButton.isEnabled = canGoBack
     }
 
     func show(_ window: TrackedWindow, canGoBack: Bool, primaryScreenHeight: CGFloat) {
         current = window
         self.canGoBack = canGoBack
-        // A hidden button leaves the stack's layout, so the buttons stay right-aligned.
-        backButton.isHidden = !canGoBack
+        backButton.isEnabled = canGoBack
         let size = stack.fittingSize
         let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
                                                   topInset: Self.topInset, rightInset: Self.rightInset)
@@ -299,6 +299,10 @@ private final class PillButton: NSButton {
         didSet { needsDisplay = true }
     }
 
+    override var isEnabled: Bool {
+        didSet { contentTintColor = isEnabled ? .labelColor : .tertiaryLabelColor }
+    }
+
     /// AppKit gives icon-only buttons alignment insets taken from the symbol's shape, which made the chevron half a
     /// point shorter and half a point wider than laid out (so its right edge was clipped). These buttons are laid out
     /// by their full frame.
@@ -344,11 +348,27 @@ private final class PillButton: NSButton {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+                                       owner: self))
     }
 
-    override func mouseEntered(with event: NSEvent) { hovering = true }
-    override func mouseExited(with event: NSEvent) { hovering = false }
+    // The pointing hand is set by hand: this app is never active, so AppKit's cursor rects never apply to its panel.
+    // It's set again as the mouse moves, in case the browser underneath resets it.
+    override func mouseEntered(with event: NSEvent) {
+        hovering = true
+        updateCursor()
+    }
+
+    override func mouseMoved(with event: NSEvent) { updateCursor() }
+
+    override func mouseExited(with event: NSEvent) {
+        hovering = false
+        NSCursor.arrow.set()
+    }
+
+    private func updateCursor() {
+        (isEnabled ? NSCursor.pointingHand : NSCursor.arrow).set()
+    }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
