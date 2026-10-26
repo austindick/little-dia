@@ -36,11 +36,12 @@ final class LittleWindowTracker {
     private var lastReported: TrackedWindow?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var followTimer: Timer?
-    private var mouseWasDown = false
     /// The shown window is being dragged or resized: its buttons are hidden until the mouse is released.
     private var dragging = false
     /// The shown window as it was when the drag began, to tell a resize from a move.
     private var dragStart: TrackedWindow?
+    /// The window server's frame for the shown window when the mouse was pressed; a drag is any change from it.
+    private var pressFrame: CGRect?
 
     /// - Parameter onResize: called with the new page-area bounds when the user finishes resizing a little window.
     /// - Parameter onSettled: called once a new little window has finished opening, with the height the browser
@@ -202,10 +203,12 @@ final class LittleWindowTracker {
                let entry = entries[id], entry.settled,
                let number = entry.windowNumber ?? onThisDesktop(frame(of: entry.element) ?? entry.frame, pid: pid),
                let server = serverInfo(of: number), server.onScreen {
-                // The window server's frame is live; Accessibility's can be stale mid-drag.
-                entries[id]?.frame = server.frame
+                // Placed by the browser's own frame: while Mission Control is showing or animating closed, the window
+                // server reports the window's thumbnail instead.
+                let frame = frame(of: entry.element) ?? entry.frame
+                entries[id]?.frame = frame
                 entries[id]?.windowNumber = number
-                visible = TrackedWindow(windowId: id, frameTopLeft: server.frame)
+                visible = TrackedWindow(windowId: id, frameTopLeft: frame)
             }
         }
         report(visible)
@@ -235,23 +238,33 @@ final class LittleWindowTracker {
     private func stopFollowing() {
         followTimer?.invalidate()
         followTimer = nil
-        mouseWasDown = false
+        pressFrame = nil
     }
 
     private func followTick() {
         let mouseDown = NSEvent.pressedMouseButtons & 1 == 1
-        defer { mouseWasDown = mouseDown }
         if !mouseDown {
+            pressFrame = nil
             if dragging {
                 dragging = false
                 noteResize()
                 lastReported = nil
                 recompute()   // reappear where the window ended up
+                // Accessibility can lag the window server at the end of a drag; check again once it has caught up.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    self?.recompute()
+                }
             }
             return
         }
         guard !dragging, let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
-              let frame = serverInfo(of: number)?.frame, frame != shown.frameTopLeft else { return }
+              let frame = serverInfo(of: number)?.frame else { return }
+        guard let pressed = pressFrame else {
+            pressFrame = frame
+            return
+        }
+        guard frame != pressed else { return }
         dragging = true
         dragStart = shown
         onChange(nil)
