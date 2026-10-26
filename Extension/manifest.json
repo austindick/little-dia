@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Little Dia",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Opens links from other apps in a little window on the desktop you're on.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1kOQpoPlX58BAMLzPhkzLi+jRhDYgCKj8EMDbM422trUuPCN7wS+tITe8DsvQ7dHx+DT6ygTpZZqc79EP2IXH+6ynQVsYfUa9QdqNQYcx1tyjJRQpuMcIXx04vZxTty7lEmLrYtkq6pxJCxmnL64Y/8fMAy773uZQHG8hbGkpDlbZiBPNz7+2bkJqdsJl2Hae6zxCfFHZ5sKBn0ZlPA5q66lo2vgQBlJuZe6wNynY8dRXDeVmeBGB1QxXEgOp0Q9DPQWCEmvpH7H6XPP1Z8gkTGu51Jdugsv4MmwKmL4578npKAHKkmLA4oc8SDkEsrmW9KE5ng77iNH5INRUfLIhQIDAQAB",
   "permissions": [
