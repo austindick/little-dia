@@ -9,9 +9,10 @@ import LittleDiaCore
 /// long page title fades out before the buttons instead of running under them.
 @MainActor
 final class TitleBarOverlay {
-    /// Gaps above and to the right of the buttons, inside the window's top-right corner.
-    static let topInset: CGFloat = 5
-    static let rightInset: CGFloat = 5
+    /// Gaps above and to the right of the buttons, inside the window's top-right corner. With the buttons'
+    /// height they fill Dia's 31pt title bar (measured 2026-10-26) with an equal gap below.
+    static let topInset: CGFloat = 4
+    static let rightInset: CGFloat = 4
     /// Dia's popup window corner radius (estimated); the rightmost button's top-right corner nests inside it.
     static let windowCornerRadius: CGFloat = 16
     /// How far left of the buttons the backdrop starts fading in.
@@ -233,8 +234,8 @@ private final class PillButton: NSButton {
         static let standard = Corners(topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6)
     }
 
-    /// Dia's title bar leaves 4pt above the buttons; at this height there's 4pt below them too.
-    static let height: CGFloat = 22
+    /// 4pt above, 23pt of button and 4pt below fill Dia's 31pt title bar.
+    static let height: CGFloat = 23
     private let filled: Bool
     private let corners: Corners
     private let fixedWidth: CGFloat?
