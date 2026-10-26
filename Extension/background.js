@@ -139,6 +139,12 @@ async function handleAppMessage(msg) {
     case "move":
       await moveToMainWindow(msg.windowId);
       break;
+    case "back": {
+      const { littleWindows } = await getState();
+      const tabId = littleWindows[msg.windowId]?.tabId;
+      if (tabId != null) await chrome.tabs.goBack(tabId).catch(() => {});
+      break;
+    }
     case "close":
       // The app gave up on this window (it never reached the screen) and opened the link normally instead.
       await chrome.windows.remove(msg.windowId).catch(() => {});
@@ -189,13 +195,18 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
   }
 });
 
-// ---- Links inside little windows ----------------------------------------------------------------------------
+// ---- Pages in little windows ---------------------------------------------------------------------------------
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const windowId = sender.tab?.windowId;
   if (msg.type === "isLittle") {
     getState().then(({ littleWindows }) => sendResponse(windowId != null && Boolean(littleWindows[windowId])));
     return true;   // responds asynchronously
+  }
+  if (msg.type === "history" && windowId != null) {
+    getState().then(({ littleWindows }) => {
+      if (littleWindows[windowId]) post({ type: "littleHistory", windowId, canGoBack: msg.canGoBack === true });
+    });
   }
   if (msg.type === "openLittle" && windowId != null) {
     openFromLittleWindow(windowId, msg.url).catch((e) => console.error("Little Dia: openLittle", e));

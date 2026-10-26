@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         overlay = TitleBarOverlay(browserName: settings.browser.name,
                                   titleBarColor: settings.browser.titleBarColor.map { NSColor($0) } ?? .windowBackgroundColor,
+                                  onBack: { [weak self] id in self?.goBack(inLittleWindow: id) },
                                   onCopy: { [weak self] id in self?.copyURL(ofLittleWindow: id) },
                                   onMove: { [weak self] id in self?.moveToMainWindow(id) },
                                   onSendToProfile: { [weak self] id, profile in self?.send(id, toProfile: profile) })
@@ -89,7 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onChange: { [weak self] window in
                 guard let self else { return }
                 if let window {
-                    self.overlay.show(window, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+                    self.overlay.show(window, canGoBack: self.registry.info(for: window.windowId)?.canGoBack ?? false,
+                                      primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
                 } else {
                     self.overlay.hide()
                 }
@@ -193,6 +195,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let pid = server.browserPID(for: bundleID) {
                 Task { _ = await tracker.track(windowId: windowId, bounds: bounds, browserPID: pid) }
             }
+        case let .littleHistory(windowId, canGoBack):
+            overlay.setCanGoBack(canGoBack, windowId: windowId)
         case let .littleBounds(_, bounds):
             settings.rememberSize(bounds)
         case let .littleClosed(windowId):
@@ -311,6 +315,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Title-bar buttons
 
+    private func goBack(inLittleWindow windowId: Int) {
+        server.send(.back(windowId: windowId), to: registry.info(for: windowId)?.browserBundleID ?? settings.browser.bundleID)
+    }
+
     private func copyURL(ofLittleWindow windowId: Int) {
         guard let url = registry.info(for: windowId)?.url else { return }
         writeToPasteboard(url)
@@ -384,6 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .littleClosed(windowId): return "littleClosed window=\(windowId)"
         case let .littleMoved(windowId): return "littleMoved window=\(windowId)"
         case let .littleURL(windowId, _): return "littleURL window=\(windowId)"
+        case let .littleHistory(windowId, canGoBack): return "littleHistory window=\(windowId) canGoBack=\(canGoBack)"
         case let .openFailed(requestId, error): return "openFailed request=\(requestId) \(error)"
         case let .hello(version): return "hello \(version)"
         case .log: return "log"

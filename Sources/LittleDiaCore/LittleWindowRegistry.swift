@@ -6,12 +6,15 @@ public struct LittleWindowInfo: Equatable, Sendable {
     /// Exactly as the browser reports it.
     public var url: String
     public var bounds: Bounds
+    /// Whether its tab has a page to go back to.
+    public var canGoBack: Bool
 
-    public init(windowId: Int, browserBundleID: String, url: String, bounds: Bounds) {
+    public init(windowId: Int, browserBundleID: String, url: String, bounds: Bounds, canGoBack: Bool = false) {
         self.windowId = windowId
         self.browserBundleID = browserBundleID
         self.url = url
         self.bounds = bounds
+        self.canGoBack = canGoBack
     }
 }
 
@@ -27,6 +30,8 @@ public final class LittleWindowRegistry {
             windows[windowId] = LittleWindowInfo(windowId: windowId, browserBundleID: bundleID, url: url, bounds: bounds)
         case let .littleURL(windowId, url):
             windows[windowId]?.url = url
+        case let .littleHistory(windowId, canGoBack):
+            windows[windowId]?.canGoBack = canGoBack
         case let .littleBounds(windowId, bounds):
             windows[windowId]?.bounds = bounds
         case let .littleClosed(windowId):

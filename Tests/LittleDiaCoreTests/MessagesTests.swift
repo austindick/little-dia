@@ -59,3 +59,12 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(String(decoding: try MessageCoding.encode(OutboundMessage.ping), as: UTF8.self) == #"{"type":"ping"}"#)
     #expect(String(decoding: try MessageCoding.encode(OutboundMessage.reload), as: UTF8.self) == #"{"type":"reload"}"#)
 }
+
+@Test func encodesBackExactly() throws {
+    #expect(String(decoding: try MessageCoding.encode(OutboundMessage.back(windowId: 42)), as: UTF8.self) == #"{"type":"back","windowId":42}"#)
+}
+
+@Test func decodesLittleHistory() throws {
+    let json = #"{"type":"littleHistory","windowId":42,"canGoBack":true}"#
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .littleHistory(windowId: 42, canGoBack: true))
+}

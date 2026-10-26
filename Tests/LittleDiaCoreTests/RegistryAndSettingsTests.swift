@@ -58,3 +58,14 @@ import Testing
     settings.rememberChromeHeight(5)
     #expect(settings.chromeHeight == 80)
 }
+
+@Test func registryTracksWhetherALittleWindowCanGoBack() {
+    let registry = LittleWindowRegistry()
+    let bounds = Bounds(left: 300, top: 137, width: 1000, height: 750)
+    registry.apply(.opened(requestId: "r1", windowId: 42, url: "https://github.com/", bounds: bounds), from: "company.thebrowser.dia")
+    #expect(registry.info(for: 42)?.canGoBack == false)
+    registry.apply(.littleHistory(windowId: 42, canGoBack: true), from: "company.thebrowser.dia")
+    #expect(registry.info(for: 42)?.canGoBack == true)
+    registry.apply(.littleHistory(windowId: 42, canGoBack: false), from: "company.thebrowser.dia")
+    #expect(registry.info(for: 42)?.canGoBack == false)
+}

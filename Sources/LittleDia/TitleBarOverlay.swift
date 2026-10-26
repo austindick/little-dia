@@ -1,10 +1,10 @@
 import AppKit
 import LittleDiaCore
 
-/// The Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
+/// The Back, Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
 /// With more than one browser profile, the Move button splits: "↗ Work" moves the page live, and "▾" offers the
-/// other profiles.
+/// other profiles. Back shows only while the page has somewhere to go back to.
 /// A click-through backdrop sits just below the buttons: the title bar's own colour, fading in from the left, so a
 /// long page title fades out before the buttons instead of running under them.
 @MainActor
@@ -22,17 +22,21 @@ final class TitleBarOverlay {
     private let backdrop: NSPanel
     private let stack = NSStackView()
     private let browserName: String
+    private let onBack: (Int) -> Void
     private let onCopy: (Int) -> Void
     private let onMove: (Int) -> Void
     private let onSendToProfile: (Int, String) -> Void
+    private var backButton: PillButton!
     private var copyButton: PillButton!
     private var profiles: BrowserProfiles?
     private var current: TrackedWindow?
+    private var canGoBack = false
     private var copiedReset: DispatchWorkItem?
 
-    init(browserName: String, titleBarColor: NSColor, onCopy: @escaping (Int) -> Void, onMove: @escaping (Int) -> Void,
-         onSendToProfile: @escaping (Int, String) -> Void) {
+    init(browserName: String, titleBarColor: NSColor, onBack: @escaping (Int) -> Void, onCopy: @escaping (Int) -> Void,
+         onMove: @escaping (Int) -> Void, onSendToProfile: @escaping (Int, String) -> Void) {
         self.browserName = browserName
+        self.onBack = onBack
         self.onCopy = onCopy
         self.onMove = onMove
         self.onSendToProfile = onSendToProfile
@@ -70,6 +74,13 @@ final class TitleBarOverlay {
         self.profiles = profiles
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
+        backButton = PillButton(title: nil, symbol: "arrow.left", label: "Back", filled: false)
+        backButton.toolTip = "Go back"
+        backButton.target = self
+        backButton.action = #selector(backClicked)
+        backButton.isHidden = !canGoBack
+        stack.addArrangedSubview(backButton)
+
         copyButton = PillButton(title: nil, symbol: "link", label: "Copy link", filled: false)
         copyButton.toolTip = "Copy this page's URL"
         copyButton.target = self
@@ -97,11 +108,20 @@ final class TitleBarOverlay {
             stack.addArrangedSubview(chevron)
         }
         panel.setContentSize(stack.fittingSize)
-        if let current, panel.isVisible { show(current, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0) }
+        if let current, panel.isVisible { show(current, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0) }
     }
 
-    func show(_ window: TrackedWindow, primaryScreenHeight: CGFloat) {
+    /// Shows or hides Back for the little window the buttons are on; other windows' changes wait until they're shown.
+    func setCanGoBack(_ canGoBack: Bool, windowId: Int) {
+        guard let current, current.windowId == windowId, panel.isVisible, canGoBack != self.canGoBack else { return }
+        show(current, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+    }
+
+    func show(_ window: TrackedWindow, canGoBack: Bool, primaryScreenHeight: CGFloat) {
         current = window
+        self.canGoBack = canGoBack
+        // A hidden button leaves the stack's layout, so the buttons stay right-aligned.
+        backButton.isHidden = !canGoBack
         let size = stack.fittingSize
         let topLeft = ScreenGeometry.overlayFrame(windowTopLeft: window.frameTopLeft, overlaySize: size,
                                                   topInset: Self.topInset, rightInset: Self.rightInset)
@@ -144,6 +164,10 @@ final class TitleBarOverlay {
         let reset = DispatchWorkItem { [weak self] in self?.copyButton.setSymbol("link") }
         copiedReset = reset
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: reset)
+    }
+
+    @objc private func backClicked() {
+        if let id = current?.windowId { onBack(id) }
     }
 
     @objc private func copyClicked() {

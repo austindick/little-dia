@@ -20,6 +20,8 @@ public enum OutboundMessage: Equatable, Sendable {
     /// `chromeHeight` is the title-bar height the app placed the window for, so the extension converts sizes the same way.
     case open(requestId: String, url: URL, bounds: Bounds, focused: Bool, chromeHeight: Int)
     case move(windowId: Int)
+    /// Goes back one page in a little window's tab.
+    case back(windowId: Int)
     /// Closes a little window the app gave up on (it never reached the screen).
     case close(windowId: Int)
     /// Asks the extension to say `hello` (its first one can arrive before the helper reaches the app and be lost).
@@ -37,6 +39,8 @@ public enum InboundMessage: Equatable, Sendable {
     case opened(requestId: String?, windowId: Int, url: String, bounds: Bounds)
     case openFailed(requestId: String, error: String)
     case littleURL(windowId: Int, url: String)
+    /// Whether a little window's tab has a page to go back to; sent when its page loads or its history changes.
+    case littleHistory(windowId: Int, canGoBack: Bool)
     case littleBounds(windowId: Int, bounds: Bounds)
     case littleClosed(windowId: Int)
     /// Sent just before a little window is closed because its page moved to the main window.
@@ -60,7 +64,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, chromeHeight, windowId, browserBundleID, browserPID, extensionVersion, error, message
+    case type, requestId, url, bounds, focused, chromeHeight, windowId, canGoBack, browserBundleID, browserPID, extensionVersion, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
@@ -83,6 +87,8 @@ extension OutboundMessage: Codable {
                          chromeHeight: try c.decode(Int.self, forKey: .chromeHeight))
         case "move":
             self = .move(windowId: try c.decode(Int.self, forKey: .windowId))
+        case "back":
+            self = .back(windowId: try c.decode(Int.self, forKey: .windowId))
         case "close":
             self = .close(windowId: try c.decode(Int.self, forKey: .windowId))
         case "ping":
@@ -106,6 +112,9 @@ extension OutboundMessage: Codable {
             try c.encode(chromeHeight, forKey: .chromeHeight)
         case let .move(windowId):
             try c.encode("move", forKey: .type)
+            try c.encode(windowId, forKey: .windowId)
+        case let .back(windowId):
+            try c.encode("back", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
         case let .close(windowId):
             try c.encode("close", forKey: .type)
@@ -135,6 +144,8 @@ extension InboundMessage: Codable {
             self = .openFailed(requestId: try c.decode(String.self, forKey: .requestId), error: try c.decode(String.self, forKey: .error))
         case "littleURL":
             self = .littleURL(windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decode(String.self, forKey: .url))
+        case "littleHistory":
+            self = .littleHistory(windowId: try c.decode(Int.self, forKey: .windowId), canGoBack: try c.decode(Bool.self, forKey: .canGoBack))
         case "littleBounds":
             self = .littleBounds(windowId: try c.decode(Int.self, forKey: .windowId), bounds: try c.decode(Bounds.self, forKey: .bounds))
         case "littleClosed":
@@ -172,6 +183,10 @@ extension InboundMessage: Codable {
             try c.encode("littleURL", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
             try c.encode(url, forKey: .url)
+        case let .littleHistory(windowId, canGoBack):
+            try c.encode("littleHistory", forKey: .type)
+            try c.encode(windowId, forKey: .windowId)
+            try c.encode(canGoBack, forKey: .canGoBack)
         case let .littleBounds(windowId, bounds):
             try c.encode("littleBounds", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
