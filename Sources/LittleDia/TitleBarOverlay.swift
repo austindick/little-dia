@@ -233,7 +233,8 @@ private final class PillButton: NSButton {
         static let standard = Corners(topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6)
     }
 
-    static let height: CGFloat = 23
+    /// Dia's title bar leaves 4pt above the buttons; at this height there's 4pt below them too.
+    static let height: CGFloat = 22
     private let filled: Bool
     private let corners: Corners
     private let fixedWidth: CGFloat?
@@ -265,7 +266,7 @@ private final class PillButton: NSButton {
     override var intrinsicContentSize: NSSize {
         if let fixedWidth { return NSSize(width: fixedWidth, height: Self.height) }
         // Icon-only buttons are unfilled, so a little extra width is invisible and makes a bigger click target.
-        let width = title.isEmpty ? Self.height + 4 : super.intrinsicContentSize.width + 16
+        let width = title.isEmpty ? 27 : super.intrinsicContentSize.width + 16
         return NSSize(width: max(width, Self.height), height: Self.height)
     }
 
