@@ -1,6 +1,6 @@
 // Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL } from "./bridge-logic.js";
 
 const HOST = "com.austindick.littledia.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used only if the app didn't send its measurement.
@@ -216,7 +216,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Backstop for new tabs the content script couldn't catch (e.g. window.open from page scripts): a new *tab* opened
 // from a little window lands in the main window, so move it into a little window. Real popups stay as they are.
+// Only web pages move: a page script could otherwise open a data: or chrome:// URL as a top-level page, which Chrome
+// blocks pages from doing themselves.
 chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
+  if (!isWebURL(details.url)) return;
   const { littleWindows } = await getState();
   const sourceTab = await chrome.tabs.get(details.sourceTabId).catch(() => null);
   if (!sourceTab || !littleWindows[sourceTab.windowId]) return;

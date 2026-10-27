@@ -69,3 +69,13 @@ export function nextReconnectDelay(previousDelayMs, connectedForMs) {
   if (connectedForMs >= 30000) return 1000;
   return Math.min(Math.max(previousDelayMs * 2, 1000), 60000);
 }
+
+/** Whether a URL is a web page (http or https), the only kind a little window opens. */
+export function isWebURL(url) {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}

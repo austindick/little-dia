@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -84,4 +84,13 @@ test("addedHeight falls back to the app's measured value when Dia reports no siz
 
 test("addedHeight uses the reported window height when there is one", () => {
   assert.equal(addedHeight({ height: 822 }, 750, 80), 72);
+});
+
+test("isWebURL accepts only http and https", () => {
+  assert.equal(isWebURL("https://x.com/a"), true);
+  assert.equal(isWebURL("http://x.com/"), true);
+  for (const url of ["data:text/html,<h1>hi</h1>", "javascript:alert(1)", "chrome://settings", "file:///etc/hosts",
+                     "about:blank", "not a url", ""]) {
+    assert.equal(isWebURL(url), false, url);
+  }
 });
