@@ -18,8 +18,9 @@ final class LittleWindowTracker {
         var frame: CGRect
         /// The window server's number for this window, used to follow it live during drags.
         var windowNumber: CGWindowID?
-        /// Height of the page area (the window minus the browser's title bar and address row).
-        var pageHeight: CGFloat
+        /// Height of the browser's title bar and address row, above the page. Measured once the window settles; it
+        /// stays the same when the window is resized or zoomed.
+        var chromeHeight: CGFloat
         /// The window has finished animating open; until then its buttons stay hidden so they don't jump around.
         var settled = false
         /// The width the window was opened at. Dia's open animation overshoots it slightly before settling.
@@ -36,12 +37,12 @@ final class LittleWindowTracker {
     private var lastReported: TrackedWindow?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var followTimer: Timer?
-    /// The shown window is being dragged or resized: its buttons are hidden until the mouse is released.
-    private var dragging = false
-    /// The shown window as it was when the drag began, to tell a resize from a move.
+    /// Whether the shown window is moving (a drag, a resize, or an animation such as zooming); its buttons stay hidden
+    /// until it holds still with the mouse up.
+    private var motion = WindowMotion()
+    /// The shown window as it was when it started moving, to tell a resize from a move.
     private var dragStart: TrackedWindow?
-    /// The window server's frame for the shown window when the mouse was pressed; a drag is any change from it.
-    private var pressFrame: CGRect?
+    private var mouseMonitor: Any?
 
     /// - Parameter onResize: called with the new page-area bounds when the user finishes resizing a little window.
     /// - Parameter onSettled: called once a new little window has finished opening, with the height the browser
@@ -67,6 +68,14 @@ final class LittleWindowTracker {
                 self.recompute()
             }
         })
+        // A title-bar double-click zooms the window by animating a picture of it; its real frame only changes once
+        // that's done. Hide the buttons as soon as the double-click lands. (This sees clicks sent to other apps only,
+        // so clicks on the buttons themselves never count.)
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard event.clickCount == 2 else { return }
+            let location = NSEvent.mouseLocation
+            MainActor.assumeIsolated { self?.doubleClicked(atAppKitPoint: location) }
+        }
     }
 
     /// Finds the browser window created for `bounds` (polling while it animates open) and starts following it.
@@ -85,7 +94,8 @@ final class LittleWindowTracker {
             if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused),
                let frame = frame(of: windows[index]) {
                 let element = windows[index]
-                entries[windowId] = Entry(element: element, frame: frame, pageHeight: CGFloat(bounds.height),
+                let pageHeight = CGFloat(bounds.height)
+                entries[windowId] = Entry(element: element, frame: frame, chromeHeight: max(0, frame.height - pageHeight),
                                           expectedWidth: CGFloat(bounds.width))
                 if let observer {
                     let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -97,8 +107,10 @@ final class LittleWindowTracker {
                 // The window is still animating open and the browser is still taking focus: show the buttons once
                 // its frame has stopped changing (two identical readings in a row), then check again a moment later.
                 Task { @MainActor [weak self] in
-                    if let settledFrame = await self?.waitUntilSettled(windowId), let pageHeight = self?.entries[windowId]?.pageHeight {
-                        self?.onSettled(windowId, settledFrame.height - pageHeight)
+                    if let settledFrame = await self?.waitUntilSettled(windowId) {
+                        let chromeHeight = max(0, settledFrame.height - pageHeight)
+                        self?.entries[windowId]?.chromeHeight = chromeHeight
+                        self?.onSettled(windowId, chromeHeight)
                     }
                     self?.entries[windowId]?.settled = true
                     self?.recompute()
@@ -179,7 +191,7 @@ final class LittleWindowTracker {
         logger.notice("stopped observing browser \(self.browserPID ?? 0)")
     }
 
-        private func handle(_ notification: String, element: AXUIElement) {
+    private func handle(_ notification: String, element: AXUIElement) {
         switch notification {
         case kAXUIElementDestroyedNotification:
             if let id = entries.first(where: { CFEqual($0.value.element, element) })?.key { untrack(windowId: id) }
@@ -194,7 +206,7 @@ final class LittleWindowTracker {
     }
 
     private func recompute() {
-        if dragging { return }   // stay hidden until the drag ends
+        if motion.moving { return }   // stay hidden until the window holds still
         var visible: TrackedWindow?
         if let pid = browserPID {
             let focusedID = focusedWindow(of: pid).flatMap { focused in entries.first { CFEqual($0.value.element, focused) }?.key }
@@ -217,14 +229,15 @@ final class LittleWindowTracker {
     private func report(_ visible: TrackedWindow?) {
         if visible == nil { stopFollowing() } else { startFollowing() }
         guard visible != lastReported else { return }
+        if visible?.windowId != lastReported?.windowId { motion.reset() }   // another window's frame isn't a move
         lastReported = visible
         onChange(visible)
     }
 
-    // MARK: Hiding during drags
+    // MARK: Hiding while the window moves
     // Buttons drawn by another app can't move in lockstep with the window, so they hide while the window is being
-    // dragged or resized and come back where it ends up. The window server reports the window's frame live; check it
-    // every frame while the buttons are showing and the mouse is held down.
+    // dragged, resized or animated (zooming, snapping into a tile) and come back where it ends up. The window server
+    // reports the window's frame live; check it every frame while the buttons are showing (see WindowMotion).
 
     private func startFollowing() {
         guard followTimer == nil else { return }
@@ -238,36 +251,50 @@ final class LittleWindowTracker {
     private func stopFollowing() {
         followTimer?.invalidate()
         followTimer = nil
-        pressFrame = nil
+        motion.reset()
     }
 
     private func followTick() {
-        let mouseDown = NSEvent.pressedMouseButtons & 1 == 1
-        if !mouseDown {
-            pressFrame = nil
-            if dragging {
-                dragging = false
-                noteResize()
-                lastReported = nil
-                recompute()   // reappear where the window ended up
-                // Accessibility can lag the window server at the end of a drag; check again once it has caught up.
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(300))
-                    self?.recompute()
-                }
-            }
+        guard let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
+              let frame = serverInfo(of: number)?.frame else {
+            if motion.moving { finishMoving(byHand: false) }   // the window went away mid-move
             return
         }
-        guard !dragging, let shown = lastReported, let number = entries[shown.windowId]?.windowNumber,
-              let frame = serverInfo(of: number)?.frame else { return }
-        guard let pressed = pressFrame else {
-            pressFrame = frame
-            return
+        switch motion.tick(frame: frame, mouseDown: NSEvent.pressedMouseButtons & 1 == 1) {
+        case .started:
+            dragStart = shown
+            onChange(nil)
+        case .ended(let byHand):
+            finishMoving(byHand: byHand)
+        case nil:
+            break
         }
-        guard frame != pressed else { return }
-        dragging = true
-        dragStart = shown
+    }
+
+    private func doubleClicked(atAppKitPoint location: CGPoint) {
+        guard !motion.moving, let shown = lastReported, let entry = entries[shown.windowId] else { return }
+        let point = CGPoint(x: location.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - location.y)
+        let frame = shown.frameTopLeft
+        // The browser's title bar and address row: everything above the page.
+        let chrome = CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: entry.chromeHeight)
+        guard chrome.contains(point) else { return }
+        // The zoom lands about 0.35s after the double-click; if nothing changes within 0.75s, the buttons come back.
+        motion.expectChange(within: 45)
+        dragStart = nil
         onChange(nil)
+    }
+
+    private func finishMoving(byHand: Bool) {
+        motion.reset()
+        // Only a resize by hand changes the remembered size: a zoom or a snap into a tile isn't a size to reuse.
+        if byHand { noteResize() } else { dragStart = nil }
+        lastReported = nil
+        recompute()   // reappear where the window ended up
+        // Accessibility can lag the window server at the end of a move; check again once it has caught up.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            self?.recompute()
+        }
     }
 
     /// If the drag that just ended changed the window's size, report the new page area. The size comes from the
@@ -278,10 +305,7 @@ final class LittleWindowTracker {
         dragStart = nil
         guard let entry = entries[start.windowId], let end = frame(of: entry.element) else { return }
         guard abs(end.width - start.frameTopLeft.width) > 1 || abs(end.height - start.frameTopLeft.height) > 1 else { return }
-        let chromeHeight = max(0, start.frameTopLeft.height - entry.pageHeight)
-        let page = ScreenGeometry.pageBounds(ofWindow: end, chromeHeight: chromeHeight)
-        entries[start.windowId]?.pageHeight = CGFloat(page.height)
-        onResize(start.windowId, page)
+        onResize(start.windowId, ScreenGeometry.pageBounds(ofWindow: end, chromeHeight: entry.chromeHeight))
     }
 
     private func serverInfo(of number: CGWindowID) -> (frame: CGRect, onScreen: Bool)? {
