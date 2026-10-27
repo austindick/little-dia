@@ -5,12 +5,18 @@ export function popupCreateOptions({ url, bounds, focused }) {
   return { type: "popup", url, left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height, focused };
 }
 
-/** The normal window "Move to main window" should use: the last one focused, else the focused one, else the first. */
+/**
+ * The normal window "Move to main window" should use: the last one focused, else the focused one, else the first.
+ * Windows are passed with their tabs. Dia can keep a normal window with no tabs that it doesn't show; a tab moved
+ * there never reaches the sidebar, so windows with tabs come first.
+ */
 export function pickMainWindowId(normalWindows, lastNormalId) {
-  if (normalWindows.some((w) => w.id === lastNormalId)) return lastNormalId;
-  const focused = normalWindows.find((w) => w.focused);
+  const withTabs = normalWindows.filter((w) => w.tabs?.length > 0);
+  const candidates = withTabs.length > 0 ? withTabs : normalWindows;
+  if (candidates.some((w) => w.id === lastNormalId)) return lastNormalId;
+  const focused = candidates.find((w) => w.focused);
   if (focused) return focused.id;
-  return normalWindows.length > 0 ? normalWindows[0].id : null;
+  return candidates.length > 0 ? candidates[0].id : null;
 }
 
 /** Bounds for a little window opened from another one: offset so both stay visible. */

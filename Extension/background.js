@@ -99,7 +99,7 @@ async function moveToMainWindow(windowId) {
   const { littleWindows, lastNormalWindowId } = await getState();
   const info = littleWindows[windowId];
   if (!info) return;
-  const normals = await chrome.windows.getAll({ windowTypes: ["normal"] });
+  const normals = await chrome.windows.getAll({ windowTypes: ["normal"], populate: true });   // pickMainWindowId looks at tabs
   const mainId = pickMainWindowId(normals, lastNormalWindowId);
 
   // Best: move the live tab, so the page isn't reloaded. Chrome's API refuses tabs leaving popup windows; try anyway.

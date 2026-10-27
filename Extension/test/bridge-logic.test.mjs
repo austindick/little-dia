@@ -19,6 +19,18 @@ test("pickMainWindowId falls back to the focused window, then the first", () => 
   assert.equal(pickMainWindowId([{ id: 1 }, { id: 2 }], null), 1);
 });
 
+test("pickMainWindowId skips a window with no tabs, which Dia keeps hidden", () => {
+  // Seen on a coworker's Mac (2026-10-27): an empty normal window listed first, nothing focused, no last window.
+  const hidden = { id: 1, tabs: [] }, shown = { id: 2, tabs: [{ id: 10 }, { id: 11 }] };
+  assert.equal(pickMainWindowId([hidden, shown], null), 2);
+  assert.equal(pickMainWindowId([hidden, shown], 1), 2);
+  assert.equal(pickMainWindowId([{ ...hidden, focused: true }, shown], null), 2);
+});
+
+test("pickMainWindowId still uses an empty window when it's the only kind there is", () => {
+  assert.equal(pickMainWindowId([{ id: 1, tabs: [] }], null), 1);
+});
+
 test("pickMainWindowId returns null with no normal windows", () => {
   assert.equal(pickMainWindowId([], 1), null);
 });
