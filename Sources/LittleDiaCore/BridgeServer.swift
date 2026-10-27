@@ -148,7 +148,8 @@ public final class BridgeServer {
         do {
             message = try MessageCoding.decodeInbound(payload)
         } catch {
-            logger.error("skipping undecodable frame: \(String(decoding: payload, as: UTF8.self), privacy: .public)")
+            // The payload may hold a page's URL, so only its size is public.
+            logger.error("skipping undecodable frame (\(payload.count) bytes): \(String(decoding: payload, as: UTF8.self), privacy: .private)")
             return
         }
         if case let .hostHello(bundleID, pid) = message {
