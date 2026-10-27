@@ -1,5 +1,6 @@
 import AppKit
 import LittleDiaCore
+import os
 
 /// The Back, Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
@@ -37,6 +38,7 @@ final class TitleBarOverlay {
          onMove: @escaping (Int) -> Void, onSendToProfile: @escaping (Int, String) -> Void) {
         self.browserName = browserName
         self.onBack = onBack
+        Self.allowCursorChangesInBackground()
         self.onCopy = onCopy
         self.onMove = onMove
         self.onSendToProfile = onSendToProfile
@@ -52,6 +54,25 @@ final class TitleBarOverlay {
         stack.spacing = 4
         panel.contentView = stack
         setProfiles(nil)
+    }
+
+    /// macOS ignores cursor changes from apps that aren't active, and this one never is. The window server has a
+    /// private per-app switch for that; it's looked up at run time, so if a macOS release drops it the buttons simply
+    /// keep the arrow cursor.
+    private static func allowCursorChangesInBackground() {
+        typealias MainConnection = @convention(c) () -> Int32
+        typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
+        let logger = Logger(subsystem: "com.austindick.littledia", category: "overlay")
+        guard let handle = dlopen(nil, RTLD_LAZY),
+              let mainSymbol = dlsym(handle, "CGSMainConnectionID"),
+              let setSymbol = dlsym(handle, "CGSSetConnectionProperty") else {
+            logger.notice("can't set the cursor in the background on this macOS")
+            return
+        }
+        let connection = unsafeBitCast(mainSymbol, to: MainConnection.self)()
+        let status = unsafeBitCast(setSymbol, to: SetProperty.self)(connection, connection, "SetsCursorInBackground" as CFString,
+                                                                    kCFBooleanTrue)
+        if status != 0 { logger.notice("can't set the cursor in the background (\(status))") }
     }
 
     private static func makePanel() -> NSPanel {
@@ -352,8 +373,9 @@ private final class PillButton: NSButton {
                                        owner: self))
     }
 
-    // The pointing hand is set by hand: this app is never active, so AppKit's cursor rects never apply to its panel.
-    // It's set again as the mouse moves, in case the browser underneath resets it.
+    // The pointing hand is set by hand: this app is never active, so AppKit's cursor rects never apply to its panel
+    // (see TitleBarOverlay.allowCursorChangesInBackground). It's set again as the mouse moves, in case the browser
+    // underneath resets it.
     override func mouseEntered(with event: NSEvent) {
         hovering = true
         updateCursor()
