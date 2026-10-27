@@ -271,8 +271,9 @@ extension NSColor {
     }
 }
 
-/// A small borderless button, optionally with a soft, semi-transparent fill that darkens on hover and press.
-/// The fill is drawn here rather than set on the button's layer, which AppKit manages itself.
+/// A small borderless button with a soft, semi-transparent fill that darkens on hover and press. Unfilled (icon-only)
+/// buttons show the fill only on hover and press. The fill is drawn here rather than set on the button's layer, which
+/// AppKit manages itself.
 private final class PillButton: NSButton {
     struct Corners {
         var topLeft: CGFloat, topRight: CGFloat, bottomRight: CGFloat, bottomLeft: CGFloat
@@ -311,7 +312,7 @@ private final class PillButton: NSButton {
 
     override var intrinsicContentSize: NSSize {
         if let fixedWidth { return NSSize(width: fixedWidth, height: Self.height) }
-        // Icon-only buttons are unfilled, so a little extra width is invisible and makes a bigger click target.
+        // Icon-only buttons get a little extra width for a bigger click target; their hover fill covers it.
         let width = title.isEmpty ? 27 : super.intrinsicContentSize.width + 16
         return NSSize(width: max(width, Self.height), height: Self.height)
     }
@@ -321,7 +322,10 @@ private final class PillButton: NSButton {
     }
 
     override var isEnabled: Bool {
-        didSet { contentTintColor = isEnabled ? .labelColor : .tertiaryLabelColor }
+        didSet {
+            contentTintColor = isEnabled ? .labelColor : .tertiaryLabelColor
+            needsDisplay = true
+        }
     }
 
     /// AppKit gives icon-only buttons alignment insets taken from the symbol's shape, which made the chevron half a
@@ -330,8 +334,11 @@ private final class PillButton: NSButton {
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsetsZero }
 
     override func draw(_ dirtyRect: NSRect) {
-        if filled {
-            let alpha: CGFloat = isHighlighted ? 0.22 : hovering ? 0.15 : 0.08
+        // Icon-only buttons have no fill at rest and a lighter one on hover and press. A disabled button (Back with
+        // nowhere to go) gets no hover fill, as it gets no pointing hand.
+        let (rest, hover, press): (CGFloat, CGFloat, CGFloat) = filled ? (0.08, 0.15, 0.22) : (0, 0.08, 0.16)
+        let alpha = isHighlighted ? press : hovering && isEnabled ? hover : rest
+        if alpha > 0 {
             NSColor.labelColor.withAlphaComponent(alpha).setFill()
             fillPath().fill()
         }
