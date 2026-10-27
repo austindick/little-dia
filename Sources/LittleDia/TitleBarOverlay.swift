@@ -108,12 +108,15 @@ final class TitleBarOverlay {
         copyButton.action = #selector(copyClicked)
         stack.addArrangedSubview(copyButton)
 
+        // The group's top-right corner nests inside the window's, and its bottom-right matches it; its left corners
+        // match the icon buttons'.
         let nest = Self.windowCornerRadius - Self.rightInset
+        let radius = PillButton.Corners.radius
         let destination = profiles?.current ?? browserName
         let split = !(profiles?.others.isEmpty ?? true)
         let move = PillButton(title: "Open in \(destination)", symbol: "arrow.up.forward.app", label: "Open in \(destination)",
-                              corners: split ? .init(topLeft: nest, topRight: 0, bottomRight: 0, bottomLeft: nest)
-                                             : .init(topLeft: nest, topRight: nest, bottomRight: nest, bottomLeft: nest))
+                              corners: split ? .init(topLeft: radius, topRight: 0, bottomRight: 0, bottomLeft: radius)
+                                             : .init(topLeft: radius, topRight: nest, bottomRight: nest, bottomLeft: radius))
         move.toolTip = "Move this page to the main \(browserName) window"
         move.target = self
         move.action = #selector(moveClicked)
@@ -277,7 +280,8 @@ extension NSColor {
 private final class PillButton: NSButton {
     struct Corners {
         var topLeft: CGFloat, topRight: CGFloat, bottomRight: CGFloat, bottomLeft: CGFloat
-        static let standard = Corners(topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6)
+        static let radius: CGFloat = 6
+        static let standard = Corners(topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius)
     }
 
     /// 4pt above, 23pt of button and 4pt below fill Dia's 31pt title bar.
