@@ -42,8 +42,10 @@ Reopen it any time from the menu bar: *Setup…*.
 - Click a link in any app: it opens in a little window on this desktop.
 - The little window's title bar has two buttons:
   - **Copy** (the link icon) copies the page's current URL.
-  - **Open in Work** (your profile's name) moves the page into Dia's main window, keeping your scroll position and
-    anything you've typed, and takes you there. The **⌄** next to it opens the page in another of your Dia profiles.
+  - **Open in Work** names the profile Dia's main window is showing, moves the page there and takes you there. Into
+    the profile you added the extension to, the page moves as it is, keeping your scroll position and anything you've
+    typed; into another profile it reopens, since profiles don't share logins. The **⌄** next to it offers your other
+    profiles. (Naming the main window's profile needs Little Dia to be allowed to control Dia; macOS asks once.)
 - Links inside a little window that would open a new tab open another little window instead.
 - Closing a little window puts you back in the app you came from.
 - Resize one and the next ones open at that size.

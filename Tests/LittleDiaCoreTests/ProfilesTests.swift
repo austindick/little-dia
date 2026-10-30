@@ -43,6 +43,24 @@ private func makeUserData(profiles: [String: String], extensionIn: String?) thro
     #expect(BrowserProfiles(current: "Work", others: ["Personal", "Side"]).all == ["Personal", "Side", "Work"])
 }
 
+@Test func openInFollowsTheProfileTheMainWindowIsShowing() {
+    let profiles = BrowserProfiles(current: "Work", others: ["Personal"])
+    #expect(profiles.destination(showing: "Personal") == "Personal")
+    #expect(profiles.destination(showing: "Work") == "Work")
+}
+
+@Test func openInFallsBackToTheExtensionsProfile() {
+    let profiles = BrowserProfiles(current: "Work", others: ["Personal"])
+    #expect(profiles.destination(showing: nil) == "Work")
+    // A profile renamed or removed since the names were read.
+    #expect(profiles.destination(showing: "Side") == "Work")
+}
+
+@Test func activeProfileScriptAsksDiaForItsFrontWindow() {
+    #expect(DiaScript.activeProfileName.contains("tell application id \"company.thebrowser.dia\""))
+    #expect(DiaScript.activeProfileName.contains("name of active profile of window 1"))
+}
+
 @Test func openTabScriptEscapesAndTargetsDia() {
     let script = DiaScript.openTab(url: "chrome://extensions")
     #expect(script.contains("company.thebrowser.dia"))

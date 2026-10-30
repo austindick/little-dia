@@ -4,8 +4,9 @@ import os
 
 /// The Back, Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
-/// With more than one browser profile, the Move button splits: "↗ Work" moves the page live, and "▾" offers the
-/// other profiles. Back is dimmed while the page has nowhere to go back to.
+/// With more than one browser profile, the Move button splits: "↗ Personal" names the profile the browser's main
+/// window is showing, and "▾" offers the others. The page moves live into the extension's profile; any other reopens
+/// it. Back is dimmed while the page has nowhere to go back to.
 /// A click-through backdrop sits just below the buttons: the title bar's own colour, fading in from the left, so a
 /// long page title fades out before the buttons instead of running under them.
 @MainActor
@@ -30,6 +31,8 @@ final class TitleBarOverlay {
     private var backButton: PillButton!
     private var copyButton: PillButton!
     private var profiles: BrowserProfiles?
+    /// The profile the browser's main window is showing (nil: unknown).
+    private var activeProfile: String?
     private var current: TrackedWindow?
     private var canGoBack = false
     private var copiedReset: DispatchWorkItem?
@@ -112,12 +115,14 @@ final class TitleBarOverlay {
         // match the icon buttons'.
         let nest = Self.windowCornerRadius - Self.rightInset
         let radius = PillButton.Corners.radius
-        let destination = profiles?.current ?? browserName
+        let destination = profiles?.destination(showing: activeProfile) ?? browserName
         let split = !(profiles?.others.isEmpty ?? true)
         let move = PillButton(title: "Open in \(destination)", symbol: "arrow.up.forward.app", label: "Open in \(destination)",
                               corners: split ? .init(topLeft: radius, topRight: 0, bottomRight: 0, bottomLeft: radius)
                                              : .init(topLeft: radius, topRight: nest, bottomRight: nest, bottomLeft: radius))
-        move.toolTip = "Move this page to the main \(browserName) window"
+        move.toolTip = destination == profiles?.current || profiles == nil
+            ? "Move this page to the main \(browserName) window"
+            : "Open this page in \(destination) in the main \(browserName) window"
         move.target = self
         move.action = #selector(moveClicked)
         stack.addArrangedSubview(move)
@@ -133,6 +138,13 @@ final class TitleBarOverlay {
         }
         panel.setContentSize(stack.fittingSize)
         if let current, panel.isVisible { show(current, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0) }
+    }
+
+    /// Relabels "Open in" for the profile the browser's main window is showing (nil: unknown).
+    func setActiveProfile(_ name: String?) {
+        guard name != activeProfile else { return }
+        activeProfile = name
+        setProfiles(profiles)
     }
 
     /// Enables or dims Back for the little window the buttons are on; other windows' changes wait until they're shown.
@@ -199,7 +211,13 @@ final class TitleBarOverlay {
     }
 
     @objc private func moveClicked() {
-        if let id = current?.windowId { onMove(id) }
+        guard let id = current?.windowId else { return }
+        // Only the extension's own profile can take the page live; another reopens it there.
+        if let profiles, profiles.destination(showing: activeProfile) != profiles.current {
+            onSendToProfile(id, profiles.destination(showing: activeProfile))
+        } else {
+            onMove(id)
+        }
     }
 
     @objc private func chevronClicked(_ sender: NSButton) {

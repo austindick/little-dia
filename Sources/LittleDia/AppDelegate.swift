@@ -26,6 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reloadPolicy = ExtensionReloadPolicy()
     private var setupWindow: SetupWindowController?
     private var updater: Updater!
+    private var profiles: BrowserProfiles?
+    /// The profile Dia's main window was showing when last asked (nil: unknown), and whether Dia is being asked now.
+    private var mainWindowProfile: String?
+    private var askingMainWindowProfile = false
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -90,6 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onChange: { [weak self] window in
                 guard let self else { return }
                 if let window {
+                    // The buttons hide whenever the little window loses focus, so the main window may have changed
+                    // profile since they were last shown.
+                    if !self.overlay.isVisible { self.refreshMainWindowProfile() }
                     self.overlay.show(window, canGoBack: self.registry.info(for: window.windowId)?.canGoBack ?? false,
                                       primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
                 } else {
@@ -129,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
             },
             openInProfile: { [weak self] url, profile in
-                await self?.runAppleScript(DiaScript.openInProfile(url: url, profile: profile)) ?? false
+                await self?.runAppleScript(DiaScript.openInProfile(url: url, profile: profile)) != nil
             },
             openNormally: { [weak self] url in
                 guard let self, let parsed = URL(string: url) else { return }
@@ -241,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let model = SetupModel(extensionFolder: extensionFolder,
                                    readStatus: { [weak self] in self?.setupStatus() ?? .unknown },
                                    openExtensionsPage: { [weak self] in
-                                       await self?.runAppleScript(DiaScript.openTab(url: "chrome://extensions")) ?? false
+                                       await self?.runAppleScript(DiaScript.openTab(url: "chrome://extensions")) != nil
                                    })
             setupWindow = SetupWindowController(model: model)
         }
@@ -339,8 +346,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Profile names for the Move button, read from the browser's files (they can change while the app runs).
     private func reloadProfiles() {
         let profiles = loadProfiles()
+        self.profiles = profiles
         logger.notice("profiles: current=\(profiles?.current ?? "unknown", privacy: .public) others=\(profiles?.others.joined(separator: ", ") ?? "", privacy: .public)")
         overlay.setProfiles(profiles)
+    }
+
+    /// Asks Dia which profile its main window is showing, so "Open in" names that one. Only with more than one
+    /// profile, and one question at a time. The first may wait on the "Little Dia wants to control Dia" prompt; without
+    /// that permission the button keeps the extension's profile.
+    private func refreshMainWindowProfile() {
+        guard !askingMainWindowProfile, !(profiles?.others.isEmpty ?? true) else { return }
+        askingMainWindowProfile = true
+        Task {
+            let answer = await runAppleScript(DiaScript.activeProfileName, logFailure: false)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = answer?.isEmpty == false ? answer : nil
+            askingMainWindowProfile = false
+            if name != mainWindowProfile {
+                logger.notice("main window profile: \(name ?? "unknown (Dia didn't answer)", privacy: .public)")
+            }
+            mainWindowProfile = name
+            overlay.setActiveProfile(name)
+        }
     }
 
     /// The browser's profiles and which one has the extension, read from its files (nil if the extension isn't in any).
@@ -352,29 +379,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Runs an AppleScript with `osascript`, so the main thread stays free (the first run may wait on the
-    /// "Little Dia wants to control Dia" permission prompt).
-    private func runAppleScript(_ source: String) async -> Bool {
+    /// "Little Dia wants to control Dia" permission prompt). Returns what the script printed, or nil if it failed.
+    private func runAppleScript(_ source: String, logFailure: Bool = true) async -> String? {
         let logger = self.logger
         return await withCheckedContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
             process.arguments = ["-e", source]
             let errors = Pipe()
+            let output = Pipe()
             process.standardError = errors
-            process.standardOutput = Pipe()
+            process.standardOutput = output
             process.terminationHandler = { finished in
-                let ok = finished.terminationStatus == 0
-                if !ok {
-                    let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                    logger.error("AppleScript failed: \(message, privacy: .public)")
+                guard finished.terminationStatus == 0 else {
+                    if logFailure {
+                        let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                        logger.error("AppleScript failed: \(message, privacy: .public)")
+                    }
+                    continuation.resume(returning: nil)
+                    return
                 }
-                continuation.resume(returning: ok)
+                continuation.resume(returning: String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self))
             }
             do {
                 try process.run()
             } catch {
                 logger.error("could not run osascript: \(error.localizedDescription, privacy: .public)")
-                continuation.resume(returning: false)
+                continuation.resume(returning: nil)
             }
         }
     }
