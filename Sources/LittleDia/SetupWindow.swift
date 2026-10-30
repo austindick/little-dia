@@ -111,6 +111,14 @@ struct SetupView: View {
                     title: "Add the extension to Dia") {
                     if extensionDone {
                         detail(extensionDoneText(status))
+                        // For adding it to another profile, the same way as the first.
+                        HStack(spacing: 8) {
+                            Button("Open Extensions Page", action: model.openExtensionsPage)
+                            Button("Show Folder", action: model.showFolder)
+                        }
+                        .controlSize(.small)
+                        .padding(.top, 2)
+                        if let note = model.extensionNote { detail(note) }
                     } else {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("1. Open Dia's Extensions page")
