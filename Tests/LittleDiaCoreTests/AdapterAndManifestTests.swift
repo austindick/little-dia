@@ -67,5 +67,5 @@ import Testing
     let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: repo.appendingPathComponent("Resources/Info.plist")), format: nil) as! [String: Any]
     let manifest = try JSONSerialization.jsonObject(with: Data(contentsOf: repo.appendingPathComponent("Extension/manifest.json"))) as! [String: Any]
     #expect(plist["CFBundleShortVersionString"] as? String == manifest["version"] as? String)
-    #expect(manifest["version"] as? String == "1.0.2")
+    #expect(manifest["version"] as? String == "1.0.3")
 }
