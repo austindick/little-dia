@@ -30,8 +30,9 @@ The setup window ticks each step off as you finish it:
 1. **Make it your default browser.** Links from other apps come to Little Dia first; it hands them to Dia.
 2. **Add the extension to Dia.** Click *Open Extensions Page* and turn on **Developer mode** (top right). Click
    *Show Folder*, then drag the highlighted **Extension** folder onto the page (or click **Load unpacked** and choose
-   it). It lives at `~/Library/Application Support/Little Dia/Extension`. Add it in the Dia profile you want little
-   windows to use.
+   it). It lives at `~/Library/Application Support/Little Dia/Extension`. Add it in each Dia profile you want little
+   windows in: links open in the profile Dia's main window is showing, when it has the extension. The setup window
+   keeps these buttons once you're done, for adding it to another profile later.
 3. **Allow the title-bar buttons.** Turn on Little Dia in System Settings › Privacy & Security › Accessibility.
 4. Only if it's needed: **Dia is pinned to one desktop.** Dock › right-click Dia › Options › Assign To › None.
 
@@ -39,13 +40,14 @@ Reopen it any time from the menu bar: *Setup…*.
 
 ## Using it
 
-- Click a link in any app: it opens in a little window on this desktop.
+- Click a link in any app: it opens in a little window on this desktop, in the profile Dia's main window is showing
+  (if that profile doesn't have the extension, in one that does).
 - The little window's title bar has two buttons:
   - **Copy** (the link icon) copies the page's current URL.
   - **Open in Work** names the profile Dia's main window is showing, moves the page there and takes you there. Into
-    the profile you added the extension to, the page moves as it is, keeping your scroll position and anything you've
-    typed; into another profile it reopens, since profiles don't share logins. The **⌄** next to it offers your other
-    profiles. (Naming the main window's profile needs Little Dia to be allowed to control Dia; macOS asks once.)
+    the little window's own profile, the page moves as it is, keeping your scroll position and anything you've typed;
+    into another profile it reopens, since profiles don't share logins. The **⌄** next to it offers your other
+    profiles. (Knowing the main window's profile needs Little Dia to be allowed to control Dia; macOS asks once.)
 - Links inside a little window that would open a new tab open another little window instead.
 - Closing a little window puts you back in the app you came from.
 - Resize one and the next ones open at that size.

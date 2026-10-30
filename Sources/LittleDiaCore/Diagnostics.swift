@@ -8,7 +8,7 @@ public enum Diagnostics {
 
     public static func report(appVersion: String, extensionVersion: String?, macOSVersion: String, browserVersion: String?,
                               status: SetupStatus, profiles: BrowserProfiles?, chromeHeight: CGFloat, logLines: [String]) -> String {
-        let profileLine = profiles.map { "\($0.all.joined(separator: ", ")) (extension in \($0.current))" } ?? "none found"
+        let profileLine = profiles.map { "\($0.all.joined(separator: ", ")) (extension in \($0.withExtension.joined(separator: ", ")))" } ?? "none found"
         let facts = [
             "Little Dia diagnostics",
             "App: \(appVersion)",

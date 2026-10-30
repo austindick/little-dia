@@ -64,6 +64,18 @@ private struct Folders {
 }
 
 /// If Dia loaded the extension from some other folder, reloading never changes its version: ask once, not forever.
+@Test func asksEachProfilesExtensionToReload() {
+    var policy = ExtensionReloadPolicy()
+    // Two profiles with the extension; an older copy can't say which profile it's in.
+    let first = policy.shouldReload(connectedVersion: "1.0.2", bundledVersion: "1.0.3", copies: 2)
+    let second = policy.shouldReload(connectedVersion: "1.0.2", bundledVersion: "1.0.3", copies: 2)
+    // A copy Dia loads from another folder comes back unchanged; it isn't asked forever.
+    let third = policy.shouldReload(connectedVersion: "1.0.2", bundledVersion: "1.0.3", copies: 2)
+    #expect(first)
+    #expect(second)
+    #expect(!third)
+}
+
 @Test func asksForAReloadOnlyOncePerVersion() {
     var policy = ExtensionReloadPolicy()
     let first = policy.shouldReload(connectedVersion: "0.2.0", bundledVersion: "0.2.1")

@@ -5,8 +5,8 @@ import os
 /// The Back, Copy and Move-to-browser buttons, drawn in a borderless panel that sits on the right end of a little
 /// window's title bar. The panel never activates this app, so the browser keeps focus when a button is clicked.
 /// With more than one browser profile, the Move button splits: "↗ Personal" names the profile the browser's main
-/// window is showing, and "▾" offers the others. The page moves live into the extension's profile; any other reopens
-/// it. Back is dimmed while the page has nowhere to go back to.
+/// window is showing, and "▾" offers the others. The page moves live into the little window's own profile; any other
+/// reopens it. Back is dimmed while the page has nowhere to go back to.
 /// A click-through backdrop sits just below the buttons: the title bar's own colour, fading in from the left, so a
 /// long page title fades out before the buttons instead of running under them.
 @MainActor
@@ -31,8 +31,9 @@ final class TitleBarOverlay {
     private var backButton: PillButton!
     private var copyButton: PillButton!
     private var profiles: BrowserProfiles?
-    /// The profile the browser's main window is showing (nil: unknown).
+    /// The profile the browser's main window is showing, and the one the shown little window is in (nil: unknown).
     private var activeProfile: String?
+    private var windowProfile: String?
     private var current: TrackedWindow?
     private var canGoBack = false
     private var copiedReset: DispatchWorkItem?
@@ -115,12 +116,12 @@ final class TitleBarOverlay {
         // match the icon buttons'.
         let nest = Self.windowCornerRadius - Self.rightInset
         let radius = PillButton.Corners.radius
-        let destination = profiles?.destination(showing: activeProfile) ?? browserName
+        let destination = profiles?.destination(showing: activeProfile, littleWindowIn: windowProfile) ?? browserName
         let split = !(profiles?.others.isEmpty ?? true)
         let move = PillButton(title: "Open in \(destination)", symbol: "arrow.up.forward.app", label: "Open in \(destination)",
                               corners: split ? .init(topLeft: radius, topRight: 0, bottomRight: 0, bottomLeft: radius)
                                              : .init(topLeft: radius, topRight: nest, bottomRight: nest, bottomLeft: radius))
-        move.toolTip = destination == profiles?.current || profiles == nil
+        move.toolTip = destination == ownProfile || profiles == nil
             ? "Move this page to the main \(browserName) window"
             : "Open this page in \(destination) in the main \(browserName) window"
         move.target = self
@@ -137,8 +138,13 @@ final class TitleBarOverlay {
             stack.addArrangedSubview(chevron)
         }
         panel.setContentSize(stack.fittingSize)
-        if let current, panel.isVisible { show(current, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0) }
+        if let current, panel.isVisible {
+            show(current, profile: windowProfile, canGoBack: canGoBack, primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+        }
     }
+
+    /// The little window's own profile: the only one its page can move into live.
+    private var ownProfile: String? { windowProfile ?? profiles?.current }
 
     /// Relabels "Open in" for the profile the browser's main window is showing (nil: unknown).
     func setActiveProfile(_ name: String?) {
@@ -154,8 +160,13 @@ final class TitleBarOverlay {
         backButton.isEnabled = canGoBack
     }
 
-    func show(_ window: TrackedWindow, canGoBack: Bool, primaryScreenHeight: CGFloat) {
+    /// `profile` is the browser profile the little window is in (nil: unknown).
+    func show(_ window: TrackedWindow, profile: String?, canGoBack: Bool, primaryScreenHeight: CGFloat) {
         current = window
+        if profile != windowProfile {
+            windowProfile = profile
+            setProfiles(profiles)
+        }
         self.canGoBack = canGoBack
         backButton.isEnabled = canGoBack
         let size = stack.fittingSize
@@ -212,12 +223,10 @@ final class TitleBarOverlay {
 
     @objc private func moveClicked() {
         guard let id = current?.windowId else { return }
-        // Only the extension's own profile can take the page live; another reopens it there.
-        if let profiles, profiles.destination(showing: activeProfile) != profiles.current {
-            onSendToProfile(id, profiles.destination(showing: activeProfile))
-        } else {
-            onMove(id)
-        }
+        guard let profiles else { return onMove(id) }
+        // Only the little window's own profile can take the page live; another reopens it there.
+        let destination = profiles.destination(showing: activeProfile, littleWindowIn: windowProfile)
+        if destination == ownProfile { onMove(id) } else { onSendToProfile(id, destination) }
     }
 
     @objc private func chevronClicked(_ sender: NSButton) {
@@ -225,8 +234,9 @@ final class TitleBarOverlay {
         let menu = NSMenu()
         for profile in profiles.all {
             // The little window's own profile gets the live move; the others reopen the page there.
+            let own = ownProfile
             let item = MenuAction(title: profile) { [weak self] in
-                if profile == profiles.current { self?.onMove(id) } else { self?.onSendToProfile(id, profile) }
+                if profile == own { self?.onMove(id) } else { self?.onSendToProfile(id, profile) }
             }
             menu.addItem(item)
         }

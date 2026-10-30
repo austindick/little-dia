@@ -31,7 +31,24 @@ function connect() {
     reconnectDelay = nextReconnectDelay(reconnectDelay, Date.now() - connectedAt);
     setTimeout(connect, reconnectDelay);
   });
-  post({ type: "hello", extensionVersion: chrome.runtime.getManifest().version });
+  sayHello();
+}
+
+/** Says hello with this copy's version and its profile token. */
+async function sayHello() {
+  const token = await profileToken().catch(() => undefined);
+  post({ type: "hello", extensionVersion: chrome.runtime.getManifest().version, profileToken: token });
+}
+
+/**
+ * A random ID kept in this profile's storage. The extension can't learn its Dia profile's name, but the app can find
+ * which profile folder holds this ID. It's written again each time, so it's in the newest storage file.
+ */
+async function profileToken() {
+  const { profileToken: stored } = await chrome.storage.local.get("profileToken");
+  const token = stored ?? crypto.randomUUID();
+  await chrome.storage.local.set({ profileToken: token });
+  return token;
 }
 
 function post(msg) {
@@ -150,7 +167,7 @@ async function handleAppMessage(msg) {
       await chrome.windows.remove(msg.windowId).catch(() => {});
       break;
     case "ping":
-      post({ type: "hello", extensionVersion: chrome.runtime.getManifest().version });
+      await sayHello();
       break;
     case "reload":
       // The app installed a newer copy of this extension in the folder Dia loads it from.

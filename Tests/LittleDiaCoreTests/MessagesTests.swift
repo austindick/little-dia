@@ -32,6 +32,18 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(try MessageCoding.decodeInbound(Data(#"{"type":"littleMoved","windowId":42}"#.utf8)) == .littleMoved(windowId: 42))
 }
 
+@Test func helloCarriesTheProfileToken() throws {
+    let json = #"{"type":"hello","extensionVersion":"1.0.3","profileToken":"7F0C"}"#
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .hello(extensionVersion: "1.0.3", profileToken: "7F0C"))
+    let encoded = try MessageCoding.encode(InboundMessage.hello(extensionVersion: "1.0.3", profileToken: "7F0C"))
+    #expect(String(decoding: encoded, as: UTF8.self) == #"{"extensionVersion":"1.0.3","profileToken":"7F0C","type":"hello"}"#)
+}
+
+@Test func helloFromAnOlderExtensionHasNoToken() throws {
+    let json = #"{"type":"hello","extensionVersion":"1.0.2"}"#
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .hello(extensionVersion: "1.0.2", profileToken: nil))
+}
+
 @Test func decodesExtensionLog() throws {
     #expect(try MessageCoding.decodeInbound(Data(#"{"type":"log","message":"move: kept page"}"#.utf8)) == .log(message: "move: kept page"))
 }

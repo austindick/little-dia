@@ -59,6 +59,15 @@ import Testing
     #expect(settings.chromeHeight == 80)
 }
 
+@Test func registryRemembersWhichConnectionOpenedAWindow() {
+    let registry = LittleWindowRegistry()
+    let bounds = Bounds(left: 300, top: 137, width: 1000, height: 750)
+    registry.apply(.opened(requestId: "r1", windowId: 42, url: "https://github.com/", bounds: bounds), from: "company.thebrowser.dia",
+                   connection: 3)
+    registry.apply(.littleURL(windowId: 42, url: "https://github.com/pulls"), from: "company.thebrowser.dia", connection: 3)
+    #expect(registry.info(for: 42)?.connection == 3)
+}
+
 @Test func registryTracksWhetherALittleWindowCanGoBack() {
     let registry = LittleWindowRegistry()
     let bounds = Bounds(left: 300, top: 137, width: 1000, height: 750)

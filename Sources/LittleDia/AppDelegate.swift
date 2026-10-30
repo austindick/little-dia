@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The profile Dia's main window was showing when last asked (nil: unknown), and whether Dia is being asked now.
     private var mainWindowProfile: String?
     private var askingMainWindowProfile = false
+    /// The profile each bridge connection's extension runs in, from the token in its hello.
+    private var connectionProfiles: [Int: String] = [:]
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -49,11 +51,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               acceptPeer: PeerVerifier.make(helperPath: Self.helperPath,
                                                             browserRequirement: settings.browser.codeRequirement))
         link = BridgeExtensionLink(server: server)
-        link.onEvent = { [weak self] message, bundleID in self?.handle(message, from: bundleID) }
+        link.onEvent = { [weak self] message, bundleID, connection in self?.handle(message, from: bundleID, connection: connection) }
         link.onConnectionsChanged = { [weak self] in
-            self?.statusMenu?.refresh()
-            self?.reloadProfiles()
-            self?.pingExtension()
+            guard let self else { return }
+            let ready = Set(self.server.readyConnections(for: self.settings.browser.bundleID))
+            self.connectionProfiles = self.connectionProfiles.filter { ready.contains($0.key) }
+            self.statusMenu?.refresh()
+            self.reloadProfiles()
+            self.pingExtension()
+            self.refreshMainWindowProfile()
+        }
+        // A link opens in the profile Dia's main window is showing, when that profile has the extension.
+        link.chooseConnection = { [weak self] ready in
+            guard let self else { return nil }
+            return ProfileRouting.connection(for: self.mainWindowProfile, ready: ready, profileOf: self.connectionProfiles)
         }
         do {
             try server.start()
@@ -84,6 +95,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             MainActor.assumeIsolated { self?.focusReturn.appActivated(app) }
         }
+        // Dia's profile can only change while Dia is in front, so what it shows as you leave it holds for the links
+        // you click elsewhere.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didDeactivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            MainActor.assumeIsolated {
+                if app.bundleIdentifier == self?.settings.browser.bundleID { self?.refreshMainWindowProfile() }
+            }
+        }
         overlay = TitleBarOverlay(browserName: settings.browser.name,
                                   titleBarColor: settings.browser.titleBarColor.map { NSColor($0) } ?? .windowBackgroundColor,
                                   onBack: { [weak self] id in self?.goBack(inLittleWindow: id) },
@@ -97,7 +116,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // The buttons hide whenever the little window loses focus, so the main window may have changed
                     // profile since they were last shown.
                     if !self.overlay.isVisible { self.refreshMainWindowProfile() }
-                    self.overlay.show(window, canGoBack: self.registry.info(for: window.windowId)?.canGoBack ?? false,
+                    let info = self.registry.info(for: window.windowId)
+                    self.overlay.show(window, profile: info?.connection.flatMap { self.connectionProfiles[$0] },
+                                      canGoBack: info?.canGoBack ?? false,
                                       primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
                 } else {
                     self.overlay.hide()
@@ -116,25 +137,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         moveToMain = MoveToMain(
             sendMove: { [weak self] id in
                 guard let self else { return }
-                self.server.send(.move(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
+                self.send(.move(windowId: id), toLittleWindow: id)
             },
             showMainWindow: { [weak self] in
                 guard let self else { return }
                 self.browserControl.showMainWindow(bundleID: self.settings.browser.bundleID)
             },
             closeNatively: { [weak self] id in self?.tracker.close(windowId: id) ?? false },
-            closeViaExtension: { [weak self] id in
-                guard let self else { return }
-                self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
-            })
+            closeViaExtension: { [weak self] id in self?.send(.close(windowId: id), toLittleWindow: id) })
         sendToProfile = SendToProfile(
             urlOf: { [weak self] id in self?.registry.info(for: id)?.url },
             forget: { [weak self] id in self?.focusReturn.forget(id) },
             closeNatively: { [weak self] id in self?.tracker.close(windowId: id) ?? false },
-            closeViaExtension: { [weak self] id in
-                guard let self else { return }
-                self.server.send(.close(windowId: id), to: self.registry.info(for: id)?.browserBundleID ?? self.settings.browser.bundleID)
-            },
+            closeViaExtension: { [weak self] id in self?.send(.close(windowId: id), toLittleWindow: id) },
             openInProfile: { [weak self] url, profile in
                 await self?.runAppleScript(DiaScript.openInProfile(url: url, profile: profile)) != nil
             },
@@ -194,9 +209,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server?.stop()
     }
 
-    private func handle(_ message: InboundMessage, from bundleID: String) {
-        logger.notice("event \(Self.describe(message), privacy: .public)")
-        registry.apply(message, from: bundleID)
+    private func handle(_ message: InboundMessage, from bundleID: String, connection: Int) {
+        logger.notice("event \(Self.describe(message), privacy: .public) (connection \(connection))")
+        registry.apply(message, from: bundleID, connection: connection)
         switch message {
         case let .opened(_, windowId, _, bounds):
             if let pid = server.browserPID(for: bundleID) {
@@ -212,9 +227,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .littleMoved:
             Task { await focusReturn.handle(message) }
             moveToMain.handle(message)
-        case let .hello(version):
+        case let .hello(version, token):
             lastExtensionVersion = version
-            checkExtensionVersion(version, browser: bundleID)
+            noteProfile(ofConnection: connection, token: token)
+            checkExtensionVersion(version, connection: connection)
         case let .log(text):
             logger.notice("extension: \(text, privacy: .public)")
         default:
@@ -240,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return SetupStatus(isDefaultBrowser: SystemIntegration.isDefaultBrowser(), extensionState: extensionState,
                            accessibilityGranted: SystemIntegration.isAccessibilityTrusted(prompt: false),
                            browserPinnedToDesktop: SystemIntegration.isBrowserAssignedToDesktop(bundleID),
-                           profile: profiles?.current)
+                           profile: profiles.map { ListFormatter.localizedString(byJoining: $0.withExtension) })
     }
 
     func showSetup() {
@@ -302,19 +318,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// The extension's first hello can be lost before the helper reaches the app, so ask again once connected.
+    /// The extension's first hello can be lost before the helper reaches the app, so ask again once connected
+    /// (each profile's copy has its own connection).
     private func pingExtension() {
-        let bundleID = settings.browser.bundleID
-        guard link.isReady(browser: bundleID) else { return }
-        server.send(.ping, to: bundleID)
+        for connection in server.readyConnections(for: settings.browser.bundleID) where connectionProfiles[connection] == nil {
+            server.send(.ping, toConnection: connection)
+        }
+    }
+
+    /// Works out which profile a connection's extension runs in, from the token it keeps in its profile's storage.
+    private func noteProfile(ofConnection connection: Int, token: String?) {
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        guard let token, let userData = settings.browser.userDataDirectory.map({ applicationSupport.appendingPathComponent($0) }) else {
+            logger.notice("connection \(connection): the extension didn't say which profile it's in")
+            return
+        }
+        let profile = BrowserProfiles.profile(holdingToken: token, userDataDirectory: userData)
+        connectionProfiles[connection] = profile
+        logger.notice("connection \(connection): extension in \(profile ?? "an unknown profile", privacy: .public)")
+    }
+
+    /// Sends to the profile's extension that opened the little window (the newest connection if that's unknown).
+    private func send(_ message: OutboundMessage, toLittleWindow windowId: Int) {
+        if let connection = registry.info(for: windowId)?.connection, server.send(message, toConnection: connection) { return }
+        server.send(message, to: settings.browser.bundleID)
     }
 
     /// After an update, the extension Dia is running is older than the copy just installed: have it reload from disk.
-    private func checkExtensionVersion(_ version: String, browser bundleID: String) {
+    private func checkExtensionVersion(_ version: String, connection: Int) {
         guard let bundled = bundledExtensionVersion, version != bundled else { return }
-        if reloadPolicy.shouldReload(connectedVersion: version, bundledVersion: bundled) {
+        if reloadPolicy.shouldReload(connectedVersion: version, bundledVersion: bundled, copies: profiles?.withExtension.count ?? 1) {
             logger.notice("extension \(version, privacy: .public) differs from the bundled \(bundled, privacy: .public); asking it to reload")
-            server.send(.reload, to: bundleID)
+            server.send(.reload, toConnection: connection)
         } else {
             logger.notice("extension \(version, privacy: .public) still differs from the bundled \(bundled, privacy: .public); Dia may be loading it from a folder other than \(self.extensionFolder.path, privacy: .public)")
         }
@@ -323,7 +358,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Title-bar buttons
 
     private func goBack(inLittleWindow windowId: Int) {
-        server.send(.back(windowId: windowId), to: registry.info(for: windowId)?.browserBundleID ?? settings.browser.bundleID)
+        send(.back(windowId: windowId), toLittleWindow: windowId)
     }
 
     private func copyURL(ofLittleWindow windowId: Int) {
@@ -425,7 +460,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .littleURL(windowId, _): return "littleURL window=\(windowId)"
         case let .littleHistory(windowId, canGoBack): return "littleHistory window=\(windowId) canGoBack=\(canGoBack)"
         case let .openFailed(requestId, error): return "openFailed request=\(requestId) \(error)"
-        case let .hello(version): return "hello \(version)"
+        case let .hello(version, _): return "hello \(version)"
         case .log: return "log"
         case .hostHello: return "hostHello"
         }

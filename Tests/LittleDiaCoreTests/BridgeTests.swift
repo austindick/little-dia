@@ -32,7 +32,11 @@ private final class TestClient: @unchecked Sendable {
 @MainActor private final class RecordingDelegate: BridgeServerDelegate {
     var messages: [InboundMessage] = []
     var connectionChanges = 0
-    func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String) { messages.append(message) }
+    var connections: [Int] = []
+    func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String, connection: Int) {
+        messages.append(message)
+        connections.append(connection)
+    }
     func bridgeConnectionsChanged(_ server: BridgeServer) { connectionChanges += 1 }
 }
 
@@ -73,6 +77,45 @@ private final class TestClient: @unchecked Sendable {
     #expect(server.send(.move(windowId: 42), to: browser) != nil)
     #expect(try await second.readOutbound() == .move(windowId: 42))
     await #expect(throws: TimedOut.self) { _ = try await first.readOutbound(timeout: 0.3) }
+}
+
+/// One helper per browser profile: each little window's messages go back to the profile that opened it.
+@MainActor @Test func sendsToAChosenConnection() async throws {
+    let (server, path) = try startServer(); defer { server.stop() }
+    let recorder = RecordingDelegate()
+    server.delegate = recorder
+    let first = try TestClient(path: path)
+    try first.ready(pid: 1)
+    #expect(await until { server.readyConnections(for: browser).count == 1 })
+    let second = try TestClient(path: path)
+    try second.ready(pid: 1)
+    #expect(await until { server.readyConnections(for: browser).count == 2 })
+    let ids = server.readyConnections(for: browser)   // oldest first
+    #expect(server.send(.move(windowId: 42), toConnection: ids[0]))
+    #expect(try await first.readOutbound() == .move(windowId: 42))
+    await #expect(throws: TimedOut.self) { _ = try await second.readOutbound(timeout: 0.3) }
+    // Messages say which connection they came from.
+    try second.send(.littleClosed(windowId: 5))
+    #expect(await until { recorder.messages.contains(.littleClosed(windowId: 5)) })
+    #expect(recorder.connections.last == ids[1])
+}
+
+@MainActor @Test func opensThroughTheConnectionTheLinkChooses() async throws {
+    let (server, path) = try startServer(); defer { server.stop() }
+    let link = BridgeExtensionLink(server: server)
+    let first = try TestClient(path: path)
+    try first.ready(pid: 1)
+    #expect(await until { server.readyConnections(for: browser).count == 1 })
+    let second = try TestClient(path: path)
+    try second.ready(pid: 1)
+    #expect(await until { server.readyConnections(for: browser).count == 2 })
+    let older = server.readyConnections(for: browser)[0]
+    link.chooseConnection = { ready in ready.contains(older) ? older : nil }
+    async let result = link.open(OpenRequest(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72),
+                                 browser: browser, timeout: .seconds(2))
+    #expect(try await first.readOutbound() == .open(requestId: "r1", url: github, bounds: someBounds, focused: true, chromeHeight: 72))
+    try first.send(.opened(requestId: "r1", windowId: 42, url: github.absoluteString, bounds: someBounds))
+    #expect(await result == .opened(windowId: 42))
 }
 
 @MainActor @Test func notReadyAfterClientDisconnects() async throws {   // Review Focus 4

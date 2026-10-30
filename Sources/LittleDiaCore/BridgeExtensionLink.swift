@@ -34,8 +34,10 @@ public protocol ExtensionLink: AnyObject {
 /// `ExtensionLink` over the bridge socket: sends `open`, then waits for the matching `opened` / `openFailed`.
 @MainActor
 public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
-    /// Every message from the extension, after pending requests have been resolved.
-    public var onEvent: ((InboundMessage, String) -> Void)?
+    /// Every message from the extension, after pending requests have been resolved, with the connection it came on.
+    public var onEvent: ((InboundMessage, String, Int) -> Void)?
+    /// Picks which of the ready connections (oldest first) opens a little window; nil, or a nil answer, means the newest.
+    public var chooseConnection: (([Int]) -> Int?)?
     public var onConnectionsChanged: (() -> Void)?
 
     private let server: BridgeServer
@@ -67,7 +69,14 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
     public func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult {
         let message = OutboundMessage.open(requestId: request.requestId, url: request.url, bounds: request.bounds,
                                            focused: request.focused, chromeHeight: request.chromeHeight)
-        guard let connection = server.send(message, to: browser) else { return .failed("extension not connected") }
+        let connection: Int
+        if let chosen = chooseConnection?(server.readyConnections(for: browser)), server.send(message, toConnection: chosen) {
+            connection = chosen
+        } else if let newest = server.send(message, to: browser) {
+            connection = newest
+        } else {
+            return .failed("extension not connected")
+        }
         return await withCheckedContinuation { continuation in
             pendingOpens[request.requestId] = (continuation, connection)
             Task { @MainActor in
@@ -81,7 +90,7 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
         server.send(.close(windowId: windowId), to: browser)
     }
 
-    public func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String) {
+    public func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String, connection: Int) {
         switch message {
         case let .opened(requestId?, windowId, _, _):
             pendingOpens.removeValue(forKey: requestId)?.continuation.resume(returning: .opened(windowId: windowId))
@@ -90,7 +99,7 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
         default:
             break
         }
-        onEvent?(message, bundleID)
+        onEvent?(message, bundleID, connection)
     }
 
     public func bridge(_ server: BridgeServer, connectionClosed id: Int) {

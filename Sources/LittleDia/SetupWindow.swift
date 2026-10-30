@@ -135,7 +135,7 @@ struct SetupView: View {
                         .controlSize(.small)
                         .padding(.top, 2)
                         if let note = model.extensionNote { detail(note) }
-                        detail("Add it in the Dia profile you want little windows to use.")
+                        detail("Add it in each Dia profile you want little windows in.")
                         detail("◌ Waiting for the extension…")
                     }
                 }

@@ -3,7 +3,8 @@ import os
 
 @MainActor
 public protocol BridgeServerDelegate: AnyObject {
-    func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String)
+    /// `connection` identifies the helper it came from: one per browser profile running the extension.
+    func bridge(_ server: BridgeServer, didReceive message: InboundMessage, fromBrowser bundleID: String, connection: Int)
     func bridgeConnectionsChanged(_ server: BridgeServer)
     /// A connection ended; anything sent on it will never be answered.
     func bridge(_ server: BridgeServer, connectionClosed id: Int)
@@ -90,6 +91,21 @@ public final class BridgeServer {
         return id
     }
 
+    /// The ready connections for that browser, oldest first.
+    public func readyConnections(for bundleID: String) -> [Int] {
+        connections
+            .filter { $0.value.browserBundleID == bundleID && $0.value.readyOrder != nil }
+            .sorted { $0.value.readyOrder! < $1.value.readyOrder! }
+            .map(\.key)
+    }
+
+    /// Sends on one connection. Returns false if it's gone or the write failed.
+    @discardableResult
+    public func send(_ message: OutboundMessage, toConnection id: Int) -> Bool {
+        guard let connection = connections[id], connection.readyOrder != nil, let payload = try? MessageCoding.encode(message) else { return false }
+        return UnixSocket.writeAll(connection.fd, NativeMessageFraming.encode(payload))
+    }
+
     private func newestReady(for bundleID: String) -> (id: Int, connection: Connection)? {
         connections
             .filter { $0.value.browserBundleID == bundleID && $0.value.readyOrder != nil }
@@ -163,6 +179,6 @@ public final class BridgeServer {
             delegate?.bridgeConnectionsChanged(self)
             return
         }
-        delegate?.bridge(self, didReceive: message, fromBrowser: connection.browserBundleID ?? "unknown")
+        delegate?.bridge(self, didReceive: message, fromBrowser: connection.browserBundleID ?? "unknown", connection: id)
     }
 }

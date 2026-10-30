@@ -35,7 +35,9 @@ public enum OutboundMessage: Equatable, Sendable {
 /// `[ ]`), so Copy puts the browser's own URL on the clipboard.
 public enum InboundMessage: Equatable, Sendable {
     case hostHello(browserBundleID: String, browserPID: Int32)
-    case hello(extensionVersion: String)
+    /// `profileToken` is a random ID the extension keeps in its profile's storage, so the app can tell which profile
+    /// it runs in (older extensions don't send one).
+    case hello(extensionVersion: String, profileToken: String? = nil)
     case opened(requestId: String?, windowId: Int, url: String, bounds: Bounds)
     case openFailed(requestId: String, error: String)
     case littleURL(windowId: Int, url: String)
@@ -64,7 +66,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, chromeHeight, windowId, canGoBack, browserBundleID, browserPID, extensionVersion, error, message
+    case type, requestId, url, bounds, focused, chromeHeight, windowId, canGoBack, browserBundleID, browserPID, extensionVersion, profileToken, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
@@ -135,7 +137,8 @@ extension InboundMessage: Codable {
             self = .hostHello(browserBundleID: try c.decode(String.self, forKey: .browserBundleID),
                               browserPID: try c.decode(Int32.self, forKey: .browserPID))
         case "hello":
-            self = .hello(extensionVersion: try c.decode(String.self, forKey: .extensionVersion))
+            self = .hello(extensionVersion: try c.decode(String.self, forKey: .extensionVersion),
+                          profileToken: try c.decodeIfPresent(String.self, forKey: .profileToken))
         case "opened":
             self = .opened(requestId: try c.decodeIfPresent(String.self, forKey: .requestId),
                            windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decode(String.self, forKey: .url),
@@ -166,9 +169,10 @@ extension InboundMessage: Codable {
             try c.encode("hostHello", forKey: .type)
             try c.encode(browserBundleID, forKey: .browserBundleID)
             try c.encode(browserPID, forKey: .browserPID)
-        case let .hello(extensionVersion):
+        case let .hello(extensionVersion, profileToken):
             try c.encode("hello", forKey: .type)
             try c.encode(extensionVersion, forKey: .extensionVersion)
+            try c.encodeIfPresent(profileToken, forKey: .profileToken)
         case let .opened(requestId, windowId, url, bounds):
             try c.encode("opened", forKey: .type)
             try c.encodeIfPresent(requestId, forKey: .requestId)
