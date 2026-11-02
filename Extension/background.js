@@ -162,6 +162,13 @@ async function handleAppMessage(msg) {
       if (tabId != null) await chrome.tabs.goBack(tabId).catch(() => {});
       break;
     }
+    case "reloadPage": {
+      // ⌘R / ⌘⇧R in a little window: Dia doesn't reload popups itself.
+      const { littleWindows } = await getState();
+      const tabId = littleWindows[msg.windowId]?.tabId;
+      if (tabId != null) await chrome.tabs.reload(tabId, { bypassCache: msg.bypassCache === true }).catch(() => {});
+      break;
+    }
     case "close":
       // The app gave up on this window (it never reached the screen) and opened the link normally instead.
       await chrome.windows.remove(msg.windowId).catch(() => {});

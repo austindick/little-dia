@@ -17,6 +17,12 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(String(decoding: try MessageCoding.encode(OutboundMessage.close(windowId: 42)), as: UTF8.self) == #"{"type":"close","windowId":42}"#)
 }
 
+@Test func encodesReloadPageExactly() throws {
+    let data = try MessageCoding.encode(OutboundMessage.reloadPage(windowId: 42, bypassCache: true))
+    #expect(String(decoding: data, as: UTF8.self) == #"{"bypassCache":true,"type":"reloadPage","windowId":42}"#)
+    #expect(try MessageCoding.decodeOutbound(data) == .reloadPage(windowId: 42, bypassCache: true))
+}
+
 @Test func decodesOpenedWithoutRequestId() throws {
     let json = #"{"type":"opened","windowId":42,"url":"https://github.com/pulls","bounds":{"left":300,"top":137,"width":1000,"height":750}}"#
     #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .opened(requestId: nil, windowId: 42, url: "https://github.com/pulls", bounds: b))

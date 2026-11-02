@@ -22,6 +22,8 @@ public enum OutboundMessage: Equatable, Sendable {
     case move(windowId: Int)
     /// Goes back one page in a little window's tab.
     case back(windowId: Int)
+    /// Reloads a little window's page (⌘R), optionally without the cache (⌘⇧R).
+    case reloadPage(windowId: Int, bypassCache: Bool)
     /// Closes a little window the app gave up on (it never reached the screen).
     case close(windowId: Int)
     /// Asks the extension to say `hello` (its first one can arrive before the helper reaches the app and be lost).
@@ -66,7 +68,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, chromeHeight, windowId, canGoBack, browserBundleID, browserPID, extensionVersion, profileToken, error, message
+    case type, requestId, url, bounds, focused, chromeHeight, windowId, canGoBack, bypassCache, browserBundleID, browserPID, extensionVersion, profileToken, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
@@ -91,6 +93,8 @@ extension OutboundMessage: Codable {
             self = .move(windowId: try c.decode(Int.self, forKey: .windowId))
         case "back":
             self = .back(windowId: try c.decode(Int.self, forKey: .windowId))
+        case "reloadPage":
+            self = .reloadPage(windowId: try c.decode(Int.self, forKey: .windowId), bypassCache: try c.decode(Bool.self, forKey: .bypassCache))
         case "close":
             self = .close(windowId: try c.decode(Int.self, forKey: .windowId))
         case "ping":
@@ -118,6 +122,10 @@ extension OutboundMessage: Codable {
         case let .back(windowId):
             try c.encode("back", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
+        case let .reloadPage(windowId, bypassCache):
+            try c.encode("reloadPage", forKey: .type)
+            try c.encode(windowId, forKey: .windowId)
+            try c.encode(bypassCache, forKey: .bypassCache)
         case let .close(windowId):
             try c.encode("close", forKey: .type)
             try c.encode(windowId, forKey: .windowId)

@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var askingMainWindowProfile = false
     /// The profile each bridge connection's extension runs in, from the token in its hello.
     private var connectionProfiles: [Int: String] = [:]
+    /// The little window whose buttons are showing: the focused one, with Dia in front.
+    private var shownLittleWindow: Int?
+    private var keyMonitor: Any?
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -112,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tracker = LittleWindowTracker(
             onChange: { [weak self] window in
                 guard let self else { return }
+                self.shownLittleWindow = window?.windowId
                 if let window {
                     // The buttons hide whenever the little window loses focus, so the main window may have changed
                     // profile since they were last shown.
@@ -134,6 +138,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.settings.rememberChromeHeight(chromeHeight)
                 self.logger.notice("measured title bar \(Int(chromeHeight.rounded()))pt")
             })
+        // ⌘R and ⌘⇧R reload the focused little window, since Dia ignores them in popups. A global monitor sees the
+        // keys sent to other apps (with the Accessibility permission the buttons already need); nothing else about
+        // them is kept.
+        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let characters = event.charactersIgnoringModifiers, isRepeat = event.isARepeat
+            let modifiers = ReloadShortcut.Modifiers(event.modifierFlags)
+            MainActor.assumeIsolated { self?.keyPressed(characters: characters, modifiers: modifiers, isRepeat: isRepeat) }
+        }
         moveToMain = MoveToMain(
             sendMove: { [weak self] id in
                 guard let self else { return }
@@ -357,6 +369,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Title-bar buttons
 
+    private func keyPressed(characters: String?, modifiers: ReloadShortcut.Modifiers, isRepeat: Bool) {
+        guard let windowId = shownLittleWindow,
+              let bypassCache = ReloadShortcut.bypassCache(characters: characters, modifiers: modifiers, isRepeat: isRepeat) else { return }
+        logger.notice("reloadPage window=\(windowId) bypassCache=\(bypassCache)")
+        send(.reloadPage(windowId: windowId, bypassCache: bypassCache), toLittleWindow: windowId)
+    }
+
     private func goBack(inLittleWindow windowId: Int) {
         send(.back(windowId: windowId), toLittleWindow: windowId)
     }
@@ -490,5 +509,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.error("installing native host manifest for \(adapter.name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             }
         }
+    }
+}
+
+private extension ReloadShortcut.Modifiers {
+    init(_ flags: NSEvent.ModifierFlags) {
+        self = []
+        if flags.contains(.command) { insert(.command) }
+        if flags.contains(.shift) { insert(.shift) }
+        if flags.contains(.option) { insert(.option) }
+        if flags.contains(.control) { insert(.control) }
     }
 }
