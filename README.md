@@ -23,6 +23,11 @@ and the setup window.
 Little Dia isn't notarized by Apple. Installing with the command above avoids the warning macOS shows for apps
 downloaded in a browser.
 
+> [!NOTE]
+> **Little Dia doesn't work with [DiaTweaks](https://github.com/JaceThings/DiaTweaks)**, or any other patch that
+> changes Dia. A patched Dia is no longer signed by The Browser Company, and Little Dia only talks to the original Dia,
+> so that no other app can pose as it. With a patched Dia, the menu says "Dia has been modified".
+
 ## Setup
 
 The setup window ticks each step off as you finish it:
@@ -79,9 +84,9 @@ Then:
   It has versions, setup status and recent log lines; web addresses are left out.
 - **"Dia extension not connected":** in Dia's `chrome://extensions`, check that Little Dia is turned on, and that it was
   loaded from `~/Library/Application Support/Little Dia/Extension`. Then click its reload icon.
-- **"Dia has been modified":** something (such as a patch or tweak) changed Dia, so it's no longer signed by The
-  Browser Company. Little Dia only talks to the original Dia, so no other app can pose as it. Put the original Dia
-  back and reopen it.
+- **"Dia has been modified":** something (such as DiaTweaks or another patch) changed Dia, so it's no longer signed
+  by The Browser Company. Little Dia only talks to the original Dia, so no other app can pose as it. Put the original
+  Dia back and reopen it.
 - **No buttons on little windows:** check that Little Dia is turned on in System Settings › Privacy & Security ›
   Accessibility.
 - **The app's log:** `/usr/bin/log stream --predicate 'subsystem == "com.austindick.littledia"'`. (In zsh, plain
