@@ -2,9 +2,10 @@ import Foundation
 
 /// Whether the browser has the extension: talking to the app right now; installed in a profile while the browser
 /// isn't running (so it can't connect); or missing, which includes the browser running without it connecting
-/// (not added, disabled, or broken).
+/// (not added, disabled, or broken). `browserModified`: the extension tried to connect from a copy of the browser that
+/// isn't signed by its maker (for example one changed by a patch), which the app refuses.
 public enum ExtensionState: Equatable, Sendable {
-    case connected, installed, missing
+    case connected, installed, missing, browserModified
 }
 
 /// The menu's one status line.
@@ -45,11 +46,17 @@ public struct SetupStatus: Equatable, Sendable {
 
     /// The steps the setup window must see done. Being pinned to a desktop is a warning, not a step.
     public var requiredDone: Bool {
-        isDefaultBrowser && extensionState != .missing && accessibilityGranted
+        isDefaultBrowser && extensionDone && accessibilityGranted
+    }
+
+    /// The extension step: connected, or installed while the browser is closed.
+    public var extensionDone: Bool {
+        extensionState == .connected || extensionState == .installed
     }
 
     public var menuLine: MenuLine {
         if !isDefaultBrowser { return .problem("Not the default browser") }
+        if extensionState == .browserModified { return .problem("Dia has been modified") }
         if extensionState == .missing { return .problem("Dia extension not connected") }
         if !accessibilityGranted { return .problem("Title-bar buttons need Accessibility") }
         if browserPinnedToDesktop { return .problem("Dia is pinned to one desktop") }

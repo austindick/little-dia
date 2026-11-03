@@ -29,6 +29,14 @@ private func status(defaultBrowser: Bool = true, extensionState: ExtensionState 
     #expect(s.menuLine == .problem("Dia extension not connected"))
 }
 
+/// A patched Dia isn't signed by The Browser Company, so Little Dia refuses its extension: say so, rather than "not
+/// connected", which sends people to reinstall the extension.
+@Test func aModifiedBrowserIsTheProblem() {
+    let s = status(extensionState: .browserModified)
+    #expect(!s.requiredDone)
+    #expect(s.menuLine == .problem("Dia has been modified"))
+}
+
 @Test func problemsAreReportedInOrder() {
     let s = status(defaultBrowser: false, extensionState: .missing, accessibility: false, pinned: true)
     #expect(s.menuLine == .problem("Not the default browser"))

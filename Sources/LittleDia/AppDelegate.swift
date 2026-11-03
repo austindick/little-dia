@@ -35,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The little window whose buttons are showing: the focused one, with Dia in front.
     private var shownLittleWindow: Int?
     private var keyMonitor: Any?
+    /// When a modified copy of the browser (signed by someone other than its maker) last tried to connect. Its
+    /// extension retries every second, so this goes stale soon after the original browser is back.
+    private var modifiedBrowserSeen: Date?
 
     /// Everything is built here rather than in didFinishLaunching, because a link that launched the app is
     /// delivered in between.
@@ -52,7 +55,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         server = BridgeServer(socketPath: ownFolder.appendingPathComponent("bridge.sock").path,
                               acceptPeer: PeerVerifier.make(helperPath: Self.helperPath,
-                                                            browserRequirement: settings.browser.codeRequirement))
+                                                            browserRequirement: settings.browser.codeRequirement,
+                                                            browserBundleID: settings.browser.bundleID,
+                                                            onModifiedBrowser: { [weak self] in
+                                                                DispatchQueue.main.async { MainActor.assumeIsolated { self?.noteModifiedBrowser() } }
+                                                            }))
         link = BridgeExtensionLink(server: server)
         link.onEvent = { [weak self] message, bundleID, connection in self?.handle(message, from: bundleID, connection: connection) }
         link.onConnectionsChanged = { [weak self] in
@@ -259,6 +266,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let extensionState: ExtensionState
         if link.isReady(browser: bundleID) {
             extensionState = .connected
+        } else if let seen = modifiedBrowserSeen, Date().timeIntervalSince(seen) < 10 {
+            extensionState = .browserModified
         } else if !browserControl.isRunning(bundleID: bundleID), profiles != nil {
             // Dia can't connect while it's closed; its profile files show the extension is there.
             extensionState = .installed
@@ -269,6 +278,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                            accessibilityGranted: SystemIntegration.isAccessibilityTrusted(prompt: false),
                            browserPinnedToDesktop: SystemIntegration.isBrowserAssignedToDesktop(bundleID),
                            profile: profiles.map { ListFormatter.localizedString(byJoining: $0.withExtension) })
+    }
+
+    /// A modified copy of the browser tried to connect and was refused: say so in the menu.
+    private func noteModifiedBrowser() {
+        let wasShowing = modifiedBrowserSeen.map { Date().timeIntervalSince($0) < 10 } ?? false
+        modifiedBrowserSeen = Date()
+        if !wasShowing {
+            logger.notice("\(self.settings.browser.name, privacy: .public) has been modified (it isn't signed by its maker); refusing its extension")
+            statusMenu?.refresh()
+        }
     }
 
     func showSetup() {

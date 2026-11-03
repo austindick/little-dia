@@ -9,7 +9,10 @@ import Security
 enum PeerVerifier {
     private static let logger = Logger(subsystem: "com.austindick.littledia", category: "bridge")
 
-    static func make(helperPath: String, browserRequirement: String?) -> @Sendable (pid_t) -> Bool {
+    /// - Parameter onModifiedBrowser: called (on the I/O queue) when the helper's parent is signed as the browser but
+    ///   fails its requirement: a copy of the browser re-signed by someone else, for example after a patch.
+    static func make(helperPath: String, browserRequirement: String?, browserBundleID: String,
+                     onModifiedBrowser: @escaping @Sendable () -> Void) -> @Sendable (pid_t) -> Bool {
         // The connecting helper must meet the bundled helper's own designated requirement: same identifier, same
         // signing certificate. The app's signature seals the helper, so check the bundle first.
         let helperRequirement = designatedRequirement(ofHelperAt: helperPath)
@@ -21,7 +24,11 @@ enum PeerVerifier {
                 executablePath: executablePath(of:),
                 parent: ProcessTree.parentPID(of:),
                 hasValidSignature: { satisfies($0, helper.value, what: "helper") },
-                isBrowser: { satisfies($0, browser.value, what: "browser") })
+                isBrowser: { pid in
+                    let trusted = satisfies(pid, browser.value, what: "browser")
+                    if !trusted, signing(of: guest(pid)).identifier == browserBundleID { onModifiedBrowser() }
+                    return trusted
+                })
             if verdict != .trusted {
                 logger.notice("rejected pid \(pid): \(verdict.reason(helperPath: helperPath), privacy: .public)")
             }
@@ -42,12 +49,33 @@ enum PeerVerifier {
             logger.notice("no code requirement for the \(what, privacy: .public); pid \(pid) can't be checked")
             return false
         }
+        let code = guest(pid)
+        var status = code == nil ? errSecCSNoSuchCode : errSecSuccess
+        if let code { status = SecCodeCheckValidity(code, [], requirement) }
+        if status != errSecSuccess {
+            let signer = signing(of: code)
+            let description = "\(executablePath(of: pid) ?? "executable unknown"), identifier \(signer.identifier ?? "none"), team \(signer.team ?? "none")"
+            logger.notice("pid \(pid) fails the \(what, privacy: .public) signature check (OSStatus \(status)): \(description, privacy: .public)")
+        }
+        return status == errSecSuccess
+    }
+
+    /// The running process's code, for signature checks.
+    private static func guest(_ pid: pid_t) -> SecCode? {
         var code: SecCode?
         let attributes = [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary
-        var status = SecCodeCopyGuestWithAttributes(nil, attributes, [], &code)
-        if status == errSecSuccess, let code { status = SecCodeCheckValidity(code, [], requirement) }
-        if status != errSecSuccess { logger.notice("pid \(pid) fails the \(what, privacy: .public) signature check (OSStatus \(status))") }
-        return status == errSecSuccess
+        guard SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess else { return nil }
+        return code
+    }
+
+    /// The identifier and team a process's code is signed with (nil when unsigned, ad-hoc, or unreadable).
+    private static func signing(of code: SecCode?) -> (identifier: String?, team: String?) {
+        var staticCode: SecStaticCode?
+        var info: CFDictionary?
+        guard let code, SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+              SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let info = info as? [String: Any] else { return (nil, nil) }
+        return (info[kSecCodeInfoIdentifier as String] as? String, info[kSecCodeInfoTeamIdentifier as String] as? String)
     }
 
     private static func requirement(from text: String) -> SecRequirement? {

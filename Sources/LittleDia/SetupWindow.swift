@@ -93,7 +93,8 @@ struct SetupView: View {
 
     var body: some View {
         let status = model.status
-        let extensionDone = status.extensionState != .missing
+        let extensionDone = status.extensionDone
+        let browserModified = status.extensionState == .browserModified
         // The first unfinished step is highlighted.
         let current: Int? = !status.isDefaultBrowser ? 1 : !extensionDone ? 2 : !status.accessibilityGranted ? 3 : nil
 
@@ -107,9 +108,12 @@ struct SetupView: View {
                     }
                 }
                 Divider()
-                row(mark: extensionDone ? .done : current == 2 ? .current : .pending, highlighted: current == 2,
-                    title: "Add the extension to Dia") {
-                    if extensionDone {
+                row(mark: extensionDone ? .done : browserModified ? .warning : current == 2 ? .current : .pending,
+                    highlighted: current == 2, title: "Add the extension to Dia") {
+                    if browserModified {
+                        // Its extension is there, but Little Dia won't talk to a Dia that isn't The Browser Company's.
+                        detail("Dia has been changed by another app, such as a patch or tweak, so it's no longer signed by The Browser Company. Little Dia only works with the original Dia, so that no other app can pose as it. Put the original Dia back, then reopen it.")
+                    } else if extensionDone {
                         detail(extensionDoneText(status))
                         // For adding it to another profile, the same way as the first.
                         HStack(spacing: 8) {

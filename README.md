@@ -79,6 +79,9 @@ Then:
   It has versions, setup status and recent log lines; web addresses are left out.
 - **"Dia extension not connected":** in Dia's `chrome://extensions`, check that Little Dia is turned on, and that it was
   loaded from `~/Library/Application Support/Little Dia/Extension`. Then click its reload icon.
+- **"Dia has been modified":** something (such as a patch or tweak) changed Dia, so it's no longer signed by The
+  Browser Company. Little Dia only talks to the original Dia, so no other app can pose as it. Put the original Dia
+  back and reopen it.
 - **No buttons on little windows:** check that Little Dia is turned on in System Settings › Privacy & Security ›
   Accessibility.
 - **The app's log:** `/usr/bin/log stream --predicate 'subsystem == "com.austindick.littledia"'`. (In zsh, plain
