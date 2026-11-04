@@ -73,7 +73,9 @@ public final class LinkRouter {
         self.makeRequestID = makeRequestID
     }
 
-    public func route(_ url: URL) async -> RouteOutcome {
+    /// - Parameter evenWhenDisabled: open a little window even with little windows turned off, because one was asked
+    ///   for (New Little Window); the setting is for links from other apps.
+    public func route(_ url: URL, evenWhenDisabled: Bool = false) async -> RouteOutcome {
         let bundleID = settings.browser.bundleID
 
         func fallback(_ reason: FallbackReason) -> RouteOutcome {
@@ -82,7 +84,7 @@ public final class LinkRouter {
             return .openedNormally(reason)
         }
 
-        guard settings.isEnabled else { return fallback(.disabled) }
+        guard settings.isEnabled || evenWhenDisabled else { return fallback(.disabled) }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return fallback(.notWebURL) }
 
         guard browser.isRunning(bundleID: bundleID) else { return fallback(.notRunning) }

@@ -6,6 +6,7 @@ import LittleDiaCore
 @MainActor
 final class StatusMenu: NSObject, NSMenuDelegate {
     private let settings: UserDefaultsSettings
+    private let newLittleWindow: () -> Void
     private let status: () -> SetupStatus
     private let showSetup: () -> Void
     private let copyDiagnostics: () -> Void
@@ -16,11 +17,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
-    init(settings: UserDefaultsSettings, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
+    init(settings: UserDefaultsSettings, newLittleWindow: @escaping () -> Void, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
          copyDiagnostics: @escaping () -> Void, updateOffer: @escaping () -> UpdateOffer?,
          checkForUpdates: @escaping () -> Void, installUpdate: @escaping (UpdateOffer) -> Void,
          isUpdating: @escaping () -> Bool) {
         self.settings = settings
+        self.newLittleWindow = newLittleWindow
         self.status = status
         self.showSetup = showSetup
         self.copyDiagnostics = copyDiagnostics
@@ -44,6 +46,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func refresh() {
         menu.removeAllItems()
 
+        // ⌃⇧⌘N works from any app (a hot key the app registers); shown here so it can be found.
+        let new = action("New Little Window…", newLittleWindow)
+        new.keyEquivalent = "n"
+        new.keyEquivalentModifierMask = [.command, .control, .shift]
+        menu.addItem(new)
         menu.addItem(action("Open Links in Little Windows", checked: settings.isEnabled) { [weak self] in
             guard let self else { return }
             settings.isEnabled.toggle()

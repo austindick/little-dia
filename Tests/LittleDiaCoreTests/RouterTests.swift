@@ -92,6 +92,15 @@ private var abandoned: [Int] = []
     #expect(browser.openNormallyCalls == [github])
 }
 
+@MainActor @Test func anAskedForLittleWindowOpensEvenWhenDisabled() async {
+    // New Little Window: the toggle is for links from other apps.
+    let (router, settings, link, browser) = makeRouter()
+    settings.isEnabled = false
+    #expect(await router.route(github, evenWhenDisabled: true) == .little(windowId: 42))
+    #expect(link.openCalls.count == 1)
+    #expect(browser.openNormallyCalls.isEmpty)
+}
+
 @MainActor @Test func fileURLOpensNormally() async {
     let (router, _, _, browser) = makeRouter()
     #expect(await router.route(URL(fileURLWithPath: "/tmp/page.html")) == .openedNormally(.notWebURL))

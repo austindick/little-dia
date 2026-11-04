@@ -55,6 +55,8 @@ Reopen it any time from the menu bar: *Setup…*.
     profiles. (Knowing the main window's profile needs Little Dia to be allowed to control Dia; macOS asks once.)
 - Links inside a little window that would open a new tab open another little window instead.
 - **⌘R** reloads a little window; **⌘⇧R** reloads it without the cache.
+- **⌃⇧⌘N** (or *New Little Window…* in the menu) opens a box for a web address or a search, then opens it in a little
+  window.
 - Closing a little window puts you back in the app you came from.
 - Resize one and the next ones open at that size.
 - If Dia isn't running, links open in its main window as usual; little windows start once Dia is open.

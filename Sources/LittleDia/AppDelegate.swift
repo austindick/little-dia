@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import LittleDiaCore
 import os
 import OSLog
@@ -35,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The little window whose buttons are showing: the focused one, with Dia in front.
     private var shownLittleWindow: Int?
     private var keyMonitor: Any?
+    private let addressBox = AddressBox()
+    private var newLittleWindowKey: HotKey?
     /// When a modified copy of the browser (signed by someone other than its maker) last tried to connect. Its
     /// extension retries every second, so this goes stale soon after the original browser is back.
     private var modifiedBrowserSeen: Date?
@@ -180,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installNativeHostManifests(applicationSupport: applicationSupport)
         updater = Updater(settings: settings)
         statusMenu = StatusMenu(settings: settings,
+                                newLittleWindow: { [weak self] in self?.newLittleWindow() },
                                 status: { [weak self] in self?.setupStatus() ?? .unknown },
                                 showSetup: { [weak self] in self?.showSetup() },
                                 copyDiagnostics: { [weak self] in self?.copyDiagnostics() },
@@ -188,6 +192,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 installUpdate: { [weak self] offer in Task { await self?.updater.install(offer) } },
                                 isUpdating: { [weak self] in self?.updater.state == .installing })
         updater.onChange = { [weak self] in self?.statusMenu?.refresh() }
+        newLittleWindowKey = HotKey(keyCode: kVK_ANSI_N, modifiers: cmdKey | controlKey | shiftKey, name: "⌃⇧⌘N") { [weak self] in
+            self?.newLittleWindow()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -215,9 +222,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The app the link was clicked in; focus goes back there when the little window closes.
         let cameFrom = focusReturn.origin(frontmost: NSWorkspace.shared.frontmostApplication)
         logger.notice("link arrived; frontmost=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?", privacy: .public) cameFrom=\(cameFrom?.localizedName ?? "none", privacy: .public)")
+        open(urls, cameFrom: cameFrom)
+    }
+
+    /// New Little Window, from the menu or ⌃⇧⌘N: asks for an address, then opens it like a clicked link, even with
+    /// little windows turned off for links.
+    private func newLittleWindow() {
+        // The box doesn't activate this app, so the frontmost app is still the one to go back to.
+        let cameFrom = focusReturn.origin(frontmost: NSWorkspace.shared.frontmostApplication)
+        addressBox.show { [weak self] url in
+            self?.logger.notice("new little window asked for; cameFrom=\(cameFrom?.localizedName ?? "none", privacy: .public)")
+            self?.open([url], cameFrom: cameFrom, evenWhenDisabled: true)
+        }
+    }
+
+    /// Opens URLs in little windows. `cameFrom`: the app focus goes back to when the little window closes.
+    private func open(_ urls: [URL], cameFrom: NSRunningApplication?, evenWhenDisabled: Bool = false) {
         Task {
             for url in urls {
-                let outcome = await router.route(url)
+                let outcome = await router.route(url, evenWhenDisabled: evenWhenDisabled)
                 logger.notice("routed \(url.absoluteString, privacy: .private) → \(String(describing: outcome), privacy: .public)")
                 if case let .little(windowId) = outcome { focusReturn.littleWindowOpened(windowId, cameFrom: cameFrom) }
             }
