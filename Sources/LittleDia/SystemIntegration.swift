@@ -31,6 +31,13 @@ enum SystemIntegration {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
+    /// Whether Stage Manager is on (Control Center › Stage Manager). Read fresh each time; it can be switched any time.
+    static var stageManagerIsOn: Bool {
+        let domain = "com.apple.WindowManager" as CFString
+        CFPreferencesAppSynchronize(domain)
+        return CFPreferencesCopyAppValue("GloballyEnabled" as CFString, domain) as? Bool ?? false
+    }
+
     static var launchAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
         set {

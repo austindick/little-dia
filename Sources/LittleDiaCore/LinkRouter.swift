@@ -61,6 +61,11 @@ public final class LinkRouter {
     private let makeRequestID: () -> String
     /// Called with a popup the router gave up on (it never reached the screen in time), so it can be closed natively.
     public var onAbandon: ((Int) -> Void)?
+    /// Called once with a popup the extension confirmed that isn't on screen yet, to bring it forward. Stage Manager
+    /// puts a background app's new window in that app's own stage, off screen, until the app comes forward. Returns
+    /// whether it tried (it doesn't without Stage Manager: there, a confirmed popup that never shows is Dia starting
+    /// up, and bringing Dia forward would switch desktops).
+    public var revealHidden: ((Int) -> Bool)?
     private let logger = Logger(subsystem: "com.austindick.littledia", category: "router")
 
     public init(settings: LittleSettings, link: ExtensionLink, browser: BrowserControl, screen: @escaping () -> ScreenContext?,
@@ -121,13 +126,18 @@ public final class LinkRouter {
             return result
         }
         var appeared = false
+        var revealed = false
         while true {
             if browser.onScreenWindows(bundleID: bundleID).contains(where: isTheNewPopup) {
                 appeared = true
                 break
             }
             if let result = ack.result, let at = ack.at {
-                guard case .opened = result else { break }                     // the extension said no
+                guard case let .opened(windowId) = result else { break }       // the extension said no
+                if !revealed {
+                    revealed = true
+                    if revealHidden?(windowId) == true { logger.notice("revealing window \(windowId), confirmed but not on screen") }
+                }
                 if ContinuousClock.now - at >= timeouts.visibility { break }   // confirmed, but never shown
             }
             try? await Task.sleep(for: timeouts.pollInterval)

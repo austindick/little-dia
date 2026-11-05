@@ -160,6 +160,14 @@ final class LittleWindowTracker {
         return AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success
     }
 
+    /// Makes the window its app's front window, so bringing the app forward shows this one. False if it isn't
+    /// tracked (yet).
+    func raise(windowId: Int) -> Bool {
+        guard let element = entries[windowId]?.element else { return false }
+        AXUIElementSetAttributeValue(element, kAXMainAttribute as CFString, kCFBooleanTrue)
+        return AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .success
+    }
+
     // MARK: Accessibility plumbing
 
     private func startObserving(_ pid: pid_t) {

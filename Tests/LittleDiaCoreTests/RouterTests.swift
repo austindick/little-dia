@@ -23,12 +23,15 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
     var closeCalls: [Int] = []
     /// Dia at cold start: the extension reports success but no window ever reaches the screen.
     var opensPhantomWindow = false
+    /// Stage Manager: the window is made in the browser's own stage, off screen until the router reveals it.
+    var hiddenUntilRevealed: WindowCandidate<Int>?
     /// Width of the window as it first appears (Dia animates it open slightly narrower).
     var appearingWidthDelta = 0
     /// How long the extension takes to confirm after the window is on screen.
     var ackDelay: Duration = .zero
     /// The window reaches the screen this long after the request (nil: right away).
     var windowDelay: Duration?
+    var staysHidden = false
     weak var screen: FakeBrowser?
 
     func isReady(browser: String) -> Bool { ready }
@@ -43,7 +46,9 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
         screen?.calls.append("open")
         if !opensPhantomWindow {
             let window = WindowCandidate(id: 500 + openCalls.count, frame: CGRect(x: CGFloat(request.bounds.left), y: CGFloat(request.bounds.top - 72), width: CGFloat(request.bounds.width - appearingWidthDelta), height: CGFloat(request.bounds.height + 72)))
-            if let windowDelay {
+            if staysHidden {
+                hiddenUntilRevealed = window
+            } else if let windowDelay {
                 Task { @MainActor [weak screen] in
                     try? await Task.sleep(for: windowDelay)
                     screen?.onScreen.append(window)
@@ -164,6 +169,34 @@ private var abandoned: [Int] = []
     #expect(abandoned == [42])
     #expect(browser.openNormallyCalls == [github])
     #expect(browser.activateCalls.isEmpty)
+}
+
+@MainActor @Test func aWindowStageManagerKeepsOffScreenIsRevealed() async {
+    let (router, _, link, browser) = makeRouter()
+    link.staysHidden = true
+    var revealed: [Int] = []
+    router.revealHidden = { windowId in
+        revealed.append(windowId)
+        if let window = link.hiddenUntilRevealed { browser.onScreen.append(window) }
+        return true
+    }
+    #expect(await router.route(github) == .little(windowId: 42))
+    #expect(revealed == [42])
+    #expect(browser.activateCalls == ["company.thebrowser.dia"])
+    #expect(browser.openNormallyCalls.isEmpty)
+}
+
+@MainActor @Test func aRevealedWindowThatNeverShowsStillFallsBack() async {
+    let (router, _, link, browser) = makeRouter()
+    link.opensPhantomWindow = true
+    var revealed: [Int] = []
+    router.revealHidden = { revealed.append($0); return true }
+    var closed: [Int] = []
+    router.onAbandon = { closed.append($0) }
+    #expect(await router.route(github) == .openedNormally(.notVisible))
+    #expect(revealed == [42])
+    #expect(closed == [42])
+    #expect(browser.openNormallyCalls == [github])
 }
 
 @MainActor @Test func activatesAsSoonAsTheWindowAppearsWithoutWaitingForTheAck() async {

@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         router = LinkRouter(settings: settings, link: link, browser: browserControl, screen: Self.currentScreen)
         router.onAbandon = { [weak self] windowId in _ = self?.tracker.close(windowId: windowId) }
+        router.revealHidden = { [weak self] windowId in self?.revealInStageManager(windowId) ?? false }
         focusReturn = FocusReturn(
             isOwnOrBrowser: { [settings] app in
                 app == NSRunningApplication.current || app.bundleIdentifier == settings?.browser.bundleID
@@ -416,6 +417,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let bypassCache = ReloadShortcut.bypassCache(characters: characters, modifiers: modifiers, isRepeat: isRepeat) else { return }
         logger.notice("reloadPage window=\(windowId) bypassCache=\(bypassCache)")
         send(.reloadPage(windowId: windowId, bypassCache: bypassCache), toLittleWindow: windowId)
+    }
+
+    /// Stage Manager keeps Dia's new little window in Dia's own stage, off screen while another app is in front. Make
+    /// it Dia's front window and bring Dia forward, so Stage Manager shows it. The window is found through
+    /// Accessibility once Dia reports it opened, so wait briefly for that.
+    private func revealInStageManager(_ windowId: Int) -> Bool {
+        guard SystemIntegration.stageManagerIsOn else { return false }
+        Task {
+            for _ in 0..<20 {
+                if tracker.raise(windowId: windowId) { break }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            logger.notice("stage manager: bringing little window \(windowId) forward")
+            browserControl.activate(bundleID: settings.browser.bundleID)
+        }
+        return true
     }
 
     private func goBack(inLittleWindow windowId: Int) {
