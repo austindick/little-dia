@@ -67,6 +67,26 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
                               bounds: target, excluding: []) == 2)
 }
 
+@Test func looseYToleranceStillRequiresExactXMatch() {
+    // Dia has been seen opening a popup ~300pt above or below where it was asked for, on some multi-display layouts,
+    // while still honoring the left edge and width exactly.
+    let farAbove = WindowCandidate(id: 1, frame: CGRect(x: 300, y: -220, width: 1000, height: 822))   // bottom 602, not 887
+    #expect(matchLittleWindow([farAbove], bounds: target, excluding: []) == nil)   // default tolerance: too far
+    #expect(matchLittleWindow([farAbove], bounds: target, excluding: [], yTolerance: 500) == 1)
+    #expect(matchLittleWindow([farAbove], bounds: target, excluding: [], yTolerance: 200) == nil)   // still outside this looser bound
+}
+
+@Test func looseYToleranceDoesNotLoosenX() {
+    let wrongX = WindowCandidate(id: 1, frame: CGRect(x: 350, y: 65, width: 1000, height: 822))   // left off by 50, bottom exact
+    #expect(matchLittleWindow([wrongX], bounds: target, excluding: [], yTolerance: 5000) == nil)
+}
+
+@Test func looseYTolerancePrefersFocusedAmongLooseMatches() {
+    let f = CGRect(x: 300, y: -220, width: 1000, height: 822)
+    #expect(matchLittleWindow([WindowCandidate(id: 1, frame: f), WindowCandidate(id: 2, frame: f)],
+                              bounds: target, excluding: [], yTolerance: 500, preferring: 2) == 2)
+}
+
 @Test func overlayOnlyForFocusedTrackedWindowOfFrontmostBrowser() {
     #expect(OverlayVisibility.windowToShow(frontmostPID: 10, browserPID: 10, focusedWindow: 5, tracked: [5]) == 5)
     #expect(OverlayVisibility.windowToShow(frontmostPID: 11, browserPID: 10, focusedWindow: 5, tracked: [5]) == nil)

@@ -13,6 +13,9 @@ struct TrackedWindow: Equatable {
 /// buttons belong on: the focused little window of the frontmost browser, on the current desktop.
 @MainActor
 final class LittleWindowTracker {
+    /// How far off the requested bottom edge a window can be and still be matched by geometry alone (see `track`).
+    static let looseYTolerance: CGFloat = 500
+
     private struct Entry {
         let element: AXUIElement
         var frame: CGRect
@@ -85,44 +88,78 @@ final class LittleWindowTracker {
         let appElement = AXUIElementCreateApplication(pid)
         let clock = ContinuousClock()
         let deadline = clock.now + .seconds(2)
+        // Fallback if the browser places the popup away from the bounds it was asked for (seen on some multi-display
+        // layouts): the last seen focused, untracked window. A freshly opened popup always takes focus, so this is
+        // still the little window even when its on-screen position doesn't line up with the request.
+        var focusedFallback: AXUIElement?
         while clock.now < deadline {
             let windows = axWindows(of: appElement)
             let taken = Set(windows.indices.filter { i in entries.values.contains { CFEqual($0.element, windows[i]) } })
             let candidates = windows.indices.compactMap { i in frame(of: windows[i]).map { WindowCandidate(id: i, frame: $0) } }
             // A new popup is the browser's focused window; prefer it over an older window at the same spot.
             let focused = focusedWindow(of: pid).flatMap { f in windows.firstIndex { CFEqual($0, f) } }
-            if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused),
+            if let focused, !taken.contains(focused) { focusedFallback = windows[focused] }
+            // Tight match first; Dia has been seen opening a popup well off from the top (or bottom) it was asked
+            // for on some multi-display layouts, while still honoring the left edge and width exactly, so retry with
+            // a loose vertical tolerance before giving up on geometry entirely.
+            if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused)
+                ?? matchLittleWindow(candidates, bounds: bounds, excluding: taken, yTolerance: Self.looseYTolerance, preferring: focused),
                let frame = frame(of: windows[index]) {
-                let element = windows[index]
-                let pageHeight = CGFloat(bounds.height)
-                entries[windowId] = Entry(element: element, frame: frame, chromeHeight: max(0, frame.height - pageHeight),
-                                          expectedWidth: CGFloat(bounds.width))
-                if let observer {
-                    let refcon = Unmanaged.passUnretained(self).toOpaque()
-                    for notification in [kAXMovedNotification, kAXResizedNotification, kAXUIElementDestroyedNotification] {
-                        AXObserverAddNotification(observer, element, notification as CFString, refcon)
-                    }
-                }
-                logger.notice("tracking little window \(windowId) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
-                // The window is still animating open and the browser is still taking focus: show the buttons once
-                // its frame has stopped changing (two identical readings in a row), then check again a moment later.
-                Task { @MainActor [weak self] in
-                    if let settledFrame = await self?.waitUntilSettled(windowId) {
-                        let chromeHeight = max(0, settledFrame.height - pageHeight)
-                        self?.entries[windowId]?.chromeHeight = chromeHeight
-                        self?.onSettled(windowId, chromeHeight)
-                    }
-                    self?.entries[windowId]?.settled = true
-                    self?.recompute()
-                    try? await Task.sleep(for: .milliseconds(400))
-                    self?.recompute()
-                }
+                adopt(windowId: windowId, bounds: bounds, element: windows[index], frame: frame)
                 return true
             }
             try? await Task.sleep(for: .milliseconds(50))
         }
+        // Require it to at least be on the screen the window was asked for, so a stray focus change (another little
+        // window opening moments later, the user clicking elsewhere) during this 2s window can't make us adopt an
+        // unrelated window on another desktop — only one that's at least in the right place.
+        let requestedFrame = CGRect(x: CGFloat(bounds.left), y: CGFloat(bounds.top),
+                                    width: CGFloat(bounds.width), height: CGFloat(bounds.height))
+        if let element = focusedFallback, let frame = frame(of: element), onSameScreen(frame, requestedFrame) {
+            logger.notice("little window \(windowId) didn't match its requested bounds; using the browser's focused window instead")
+            adopt(windowId: windowId, bounds: bounds, element: element, frame: frame)
+            return true
+        }
         logger.error("could not find little window \(windowId) through Accessibility")
         return false
+    }
+
+    /// Whether `a` and `b` (both in top-left coordinates) sit on the same physical display.
+    private func onSameScreen(_ a: CGRect, _ b: CGRect) -> Bool {
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        func screen(of rect: CGRect) -> NSScreen? {
+            let appKit = ScreenGeometry.appKitRect(fromTopLeft: rect, primaryScreenHeight: primaryHeight)
+            return NSScreen.screens.first { $0.frame.contains(CGPoint(x: appKit.midX, y: appKit.midY)) }
+        }
+        guard let screenA = screen(of: a), let screenB = screen(of: b) else { return false }
+        return screenA == screenB
+    }
+
+    /// Starts tracking `element` as `windowId`'s little window, with its current `frame`.
+    private func adopt(windowId: Int, bounds: Bounds, element: AXUIElement, frame: CGRect) {
+        let pageHeight = CGFloat(bounds.height)
+        entries[windowId] = Entry(element: element, frame: frame, chromeHeight: max(0, frame.height - pageHeight),
+                                  expectedWidth: CGFloat(bounds.width))
+        if let observer {
+            let refcon = Unmanaged.passUnretained(self).toOpaque()
+            for notification in [kAXMovedNotification, kAXResizedNotification, kAXUIElementDestroyedNotification] {
+                AXObserverAddNotification(observer, element, notification as CFString, refcon)
+            }
+        }
+        logger.notice("tracking little window \(windowId) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
+        // The window is still animating open and the browser is still taking focus: show the buttons once
+        // its frame has stopped changing (two identical readings in a row), then check again a moment later.
+        Task { @MainActor [weak self] in
+            if let settledFrame = await self?.waitUntilSettled(windowId) {
+                let chromeHeight = max(0, settledFrame.height - pageHeight)
+                self?.entries[windowId]?.chromeHeight = chromeHeight
+                self?.onSettled(windowId, chromeHeight)
+            }
+            self?.entries[windowId]?.settled = true
+            self?.recompute()
+            try? await Task.sleep(for: .milliseconds(400))
+            self?.recompute()
+        }
     }
 
     /// Returns the settled frame, or nil if the window never settled (or went away) within ~1.2s.

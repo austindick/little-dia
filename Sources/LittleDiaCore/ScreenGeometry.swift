@@ -65,17 +65,24 @@ public struct WindowCandidate<ID: Hashable>: Equatable {
 /// Finds the window the browser created for `bounds`. Dia adds its title bar and address row *above* the requested
 /// page area, so only the left, right and bottom edges are compared. When several windows match, `preferring` (the
 /// browser's focused window, which a new popup always is) wins.
+///
+/// - Parameter yTolerance: allowed error on the bottom edge, separate from `tolerance` (left and right). On some
+///   multi-display layouts Dia opens the window noticeably higher or lower than asked, while still honoring the
+///   left edge and width exactly; passing a looser `yTolerance` still identifies the right window by that still-exact
+///   horizontal match, without having to fall back to a non-geometric signal. Defaults to `tolerance`.
 public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>], bounds: Bounds, excluding: Set<ID>,
-                                            tolerance: CGFloat = 6, preferring: ID? = nil) -> ID? {
+                                            tolerance: CGFloat = 6, yTolerance: CGFloat? = nil, preferring: ID? = nil) -> ID? {
     let left = CGFloat(bounds.left)
     let right = CGFloat(bounds.left + bounds.width)
     let bottom = CGFloat(bounds.top + bounds.height)
+    let yTolerance = yTolerance ?? tolerance
     var best: (id: ID, score: CGFloat)?
     for candidate in candidates where !excluding.contains(candidate.id) {
-        let deltas = [abs(candidate.frame.minX - left), abs(candidate.frame.maxX - right), abs(candidate.frame.maxY - bottom)]
-        guard deltas.allSatisfy({ $0 <= tolerance }) else { continue }
+        let xDeltas = [abs(candidate.frame.minX - left), abs(candidate.frame.maxX - right)]
+        let yDelta = abs(candidate.frame.maxY - bottom)
+        guard xDeltas.allSatisfy({ $0 <= tolerance }), yDelta <= yTolerance else { continue }
         if candidate.id == preferring { return candidate.id }
-        let score = deltas.reduce(0, +)
+        let score = xDeltas.reduce(0, +) + yDelta
         if best == nil || score < best!.score {
             best = (candidate.id, score)
         }
