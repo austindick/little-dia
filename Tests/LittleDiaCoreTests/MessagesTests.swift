@@ -9,6 +9,11 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(String(decoding: data, as: UTF8.self) == #"{"bounds":{"height":750,"left":300,"top":137,"width":1000},"chromeHeight":72,"focused":true,"requestId":"r1","type":"open","url":"https://github.com/"}"#)
 }
 
+@Test func encodesTheTopOffsetOnlyWhenThereIsOne() throws {
+    let data = try MessageCoding.encode(OutboundMessage.open(requestId: "r1", url: URL(string: "https://github.com/")!, bounds: b, focused: true, chromeHeight: 72, topOffset: 323))
+    #expect(String(decoding: data, as: UTF8.self) == #"{"bounds":{"height":750,"left":300,"top":137,"width":1000},"chromeHeight":72,"focused":true,"requestId":"r1","topOffset":323,"type":"open","url":"https://github.com/"}"#)
+}
+
 @Test func encodesMoveExactly() throws {
     #expect(String(decoding: try MessageCoding.encode(OutboundMessage.move(windowId: 42)), as: UTF8.self) == #"{"type":"move","windowId":42}"#)
 }

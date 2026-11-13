@@ -104,10 +104,16 @@ final class LittleWindowTracker {
                     }
                 }
                 logger.notice("tracking little window \(windowId) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
+                moveToRequestedSpot(windowId, bounds: bounds)
                 // The window is still animating open and the browser is still taking focus: show the buttons once
                 // its frame has stopped changing (two identical readings in a row), then check again a moment later.
                 Task { @MainActor [weak self] in
-                    if let settledFrame = await self?.waitUntilSettled(windowId) {
+                    var settledFrame = await self?.waitUntilSettled(windowId)
+                    // The open animation can leave it where the browser put it: move it once more, and wait for that.
+                    if settledFrame != nil, self?.moveToRequestedSpot(windowId, bounds: bounds) == true {
+                        settledFrame = await self?.waitUntilSettled(windowId)
+                    }
+                    if let settledFrame {
                         let chromeHeight = max(0, settledFrame.height - pageHeight)
                         self?.entries[windowId]?.chromeHeight = chromeHeight
                         self?.onSettled(windowId, chromeHeight)
@@ -140,6 +146,18 @@ final class LittleWindowTracker {
                   let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary else { return nil }
             return CGRect(dictionaryRepresentation: boundsInfo)
         }
+    }
+
+    /// Moves the window to where it was asked for, if the browser put it elsewhere (Dia does on a display other than
+    /// the main one). True if it moved it.
+    @discardableResult
+    private func moveToRequestedSpot(_ windowId: Int, bounds: Bounds) -> Bool {
+        guard let element = entries[windowId]?.element, let frame = frame(of: element),
+              var origin = ScreenGeometry.requestedOrigin(ofWindow: frame, bounds: bounds),
+              let value = AXValueCreate(.cgPoint, &origin) else { return false }
+        let result = AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, value)
+        logger.notice("moved little window \(windowId) from \(Int(frame.minX)),\(Int(frame.minY)) to \(Int(origin.x)),\(Int(origin.y)) (\(result.rawValue))")
+        return result == .success
     }
 
     /// Returns the settled frame, or nil if the window never settled (or went away) within ~1.2s.

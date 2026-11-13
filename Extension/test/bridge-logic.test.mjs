@@ -10,6 +10,11 @@ test("popupCreateOptions maps fields exactly", () => {
   });
 });
 
+test("popupCreateOptions asks Dia for a spot lower by the top offset", () => {
+  // Dia places popups on a screen taller than the main one higher by the difference; the app sends that difference.
+  assert.equal(popupCreateOptions({ url: "https://github.com/", bounds, focused: true, topOffset: 323 }).top, 460);
+});
+
 test("pickMainWindowId prefers the last normal window", () => {
   assert.equal(pickMainWindowId([{ id: 1 }, { id: 2, focused: true }], 1), 1);
 });

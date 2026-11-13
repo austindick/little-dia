@@ -1,8 +1,12 @@
 // Pure helpers for the service worker, kept separate so they can be tested with `node --test`.
 
 /** chrome.windows.create options for a little window. */
-export function popupCreateOptions({ url, bounds, focused }) {
-  return { type: "popup", url, left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height, focused };
+/**
+ * `topOffset` is added to the top: Dia places a popup on a screen of another height than the main one off by the
+ * difference, so the app asks for a spot that much lower (or higher) to have it land at `bounds`.
+ */
+export function popupCreateOptions({ url, bounds, focused, topOffset = 0 }) {
+  return { type: "popup", url, left: bounds.left, top: bounds.top + topOffset, width: bounds.width, height: bounds.height, focused };
 }
 
 /**

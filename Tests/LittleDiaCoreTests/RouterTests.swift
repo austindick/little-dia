@@ -80,10 +80,10 @@ private let fast = RouterTimeouts(runningToReady: .milliseconds(100), openAck: .
 
 private var abandoned: [Int] = []
 
-@MainActor private func makeRouter() -> (LinkRouter, FakeSettings, FakeLink, FakeBrowser) {
+@MainActor private func makeRouter(screen: ScreenContext = primary) -> (LinkRouter, FakeSettings, FakeLink, FakeBrowser) {
     let settings = FakeSettings(), link = FakeLink(), browser = FakeBrowser()
     link.screen = browser
-    let router = LinkRouter(settings: settings, link: link, browser: browser, screen: { primary },
+    let router = LinkRouter(settings: settings, link: link, browser: browser, screen: { screen },
                             timeouts: fast, makeRequestID: { "r1" })
     router.onAbandon = { abandoned.append($0) }
     return (router, settings, link, browser)
@@ -118,6 +118,16 @@ private var abandoned: [Int] = []
     #expect(link.openCalls == [OpenRequest(requestId: "r1", url: github, bounds: Bounds(left: 300, top: 173, width: 1000, height: 750), focused: true, chromeHeight: 72)])
     #expect(browser.activateCalls == ["company.thebrowser.dia"])
     #expect(browser.openNormallyCalls.isEmpty)
+}
+
+@MainActor @Test func onAScreenTallerThanTheMainOneDiaIsAskedForASpotLower() async {
+    // Dia places it higher by the difference in heights; the bounds stay where the window should end up.
+    let taller = ScreenContext(visibleFrame: CGRect(x: 1600, y: -200, width: 1600, height: 1176), primaryScreenHeight: 1000,
+                               screenHeight: 1200)
+    let (router, _, link, _) = makeRouter(screen: taller)
+    _ = await router.route(github)
+    #expect(link.openCalls.first?.topOffset == 200)
+    #expect(link.openCalls.first?.bounds == ScreenGeometry.littleWindowBounds(size: CGSize(width: 1000, height: 750), on: taller, chromeHeight: 72))
 }
 
 @MainActor @Test func notRunningOpensNormallyInMainWindow() async {   // owner decision 2026-10-23

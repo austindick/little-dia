@@ -69,8 +69,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 connect();
 
 // ---- State (survives service-worker restarts) -------------------------------------------------------------------
-// littleWindows: { [windowId]: { tabId, chrome, bounds } } where chrome is the height the browser added above the page
-// area and bounds is the window's last known page area.
+// littleWindows: { [windowId]: { tabId, chrome, bounds, topOffset } } where chrome is the height the browser added above
+// the page area, bounds is the window's last known page area, and topOffset is what the app had added to its top when
+// asking Dia (see popupCreateOptions).
 
 async function getState() {
   const s = await chrome.storage.session.get(["littleWindows", "lastNormalWindowId"]);
@@ -90,12 +91,12 @@ function updateLittleWindows(change) {
 
 // ---- Little windows ---------------------------------------------------------------------------------------------
 
-async function openLittleWindow({ url, bounds, focused = true, requestId, chromeHeight: measured }) {
-  const win = await chrome.windows.create(popupCreateOptions({ url, bounds, focused }));
+async function openLittleWindow({ url, bounds, focused = true, requestId, chromeHeight: measured, topOffset = 0 }) {
+  const win = await chrome.windows.create(popupCreateOptions({ url, bounds, focused, topOffset }));
   // Dia reports 0x0 here; fall back to the request and the title-bar height the app measured.
   const added = addedHeight(win, bounds.height, measured ?? DIA_CHROME_HEIGHT);
   const pageBounds = reportedBounds(bounds, win);
-  await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: added, bounds: pageBounds }; });
+  await updateLittleWindows((w) => { w[win.id] = { tabId: win.tabs?.[0]?.id, chrome: added, bounds: pageBounds, topOffset }; });
   const opened = { type: "opened", windowId: win.id, url, bounds: pageBounds };
   if (requestId) opened.requestId = requestId;
   post(opened);
@@ -109,7 +110,9 @@ async function openFromLittleWindow(sourceWindowId, url) {
   if (!source) return;
   const current = await chrome.windows.get(sourceWindowId).catch(() => null);
   const from = current && current.width > 0 ? windowBounds(current, source.chrome) : source.bounds;
-  await openLittleWindow({ url, bounds: cascadeBounds(from), focused: true, chromeHeight: source.chrome });
+  // Same screen as its source, so Dia needs the same correction (windows.get reports the window where it really is).
+  await openLittleWindow({ url, bounds: cascadeBounds(from), focused: true, chromeHeight: source.chrome,
+                           topOffset: source.topOffset ?? 0 });
 }
 
 async function moveToMainWindow(windowId) {
@@ -148,7 +151,7 @@ async function handleAppMessage(msg) {
   switch (msg.type) {
     case "open":
       try {
-        await openLittleWindow({ url: msg.url, bounds: msg.bounds, focused: msg.focused, requestId: msg.requestId, chromeHeight: msg.chromeHeight });
+        await openLittleWindow({ url: msg.url, bounds: msg.bounds, focused: msg.focused, requestId: msg.requestId, chromeHeight: msg.chromeHeight, topOffset: msg.topOffset });
       } catch (e) {
         post({ type: "openFailed", requestId: msg.requestId, error: String(e) });
       }
@@ -233,7 +236,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
   }
   if (msg.type === "openLittle" && windowId != null) {
-    openFromLittleWindow(windowId, msg.url).catch((e) => console.error("Little Dia: openLittle", e));
+    openFromLittleWindow(windowId, msg.url).catch((e) => post({ type: "log", message: `openLittle failed: ${e?.message ?? e}` }));
   }
   return false;
 });

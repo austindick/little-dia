@@ -6,13 +6,16 @@ public struct OpenRequest: Equatable, Sendable {
     public var bounds: Bounds
     public var focused: Bool
     public var chromeHeight: Int
+    /// Added to `bounds.top` only in the browser's own request (see `ScreenGeometry.diaTopOffset`).
+    public var topOffset: Int
 
-    public init(requestId: String, url: URL, bounds: Bounds, focused: Bool, chromeHeight: Int) {
+    public init(requestId: String, url: URL, bounds: Bounds, focused: Bool, chromeHeight: Int, topOffset: Int = 0) {
         self.requestId = requestId
         self.url = url
         self.bounds = bounds
         self.focused = focused
         self.chromeHeight = chromeHeight
+        self.topOffset = topOffset
     }
 }
 
@@ -68,7 +71,8 @@ public final class BridgeExtensionLink: ExtensionLink, BridgeServerDelegate {
 
     public func open(_ request: OpenRequest, browser: String, timeout: Duration) async -> OpenResult {
         let message = OutboundMessage.open(requestId: request.requestId, url: request.url, bounds: request.bounds,
-                                           focused: request.focused, chromeHeight: request.chromeHeight)
+                                           focused: request.focused, chromeHeight: request.chromeHeight,
+                                           topOffset: request.topOffset)
         let connection: Int
         if let chosen = chooseConnection?(server.readyConnections(for: browser)), server.send(message, toConnection: chosen) {
             connection = chosen

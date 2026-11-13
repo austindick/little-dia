@@ -551,7 +551,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let screens = NSScreen.screens
         guard let primary = screens.first,
               let screen = screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main ?? screens.first else { return nil }
-        return ScreenContext(visibleFrame: screen.visibleFrame, primaryScreenHeight: primary.frame.height)
+        return ScreenContext(visibleFrame: screen.visibleFrame, primaryScreenHeight: primary.frame.height,
+                             screenHeight: screen.frame.height)
     }
 
     private static var helperPath: String {

@@ -6,10 +6,13 @@ public struct ScreenContext: Equatable, Sendable {
     public var visibleFrame: CGRect
     /// Height of the primary screen, used to flip between AppKit and top-left (Chromium / Accessibility) coordinates.
     public var primaryScreenHeight: CGFloat
+    /// Height of this screen's whole frame (the primary screen's when not given).
+    public var screenHeight: CGFloat
 
-    public init(visibleFrame: CGRect, primaryScreenHeight: CGFloat) {
+    public init(visibleFrame: CGRect, primaryScreenHeight: CGFloat, screenHeight: CGFloat? = nil) {
         self.visibleFrame = visibleFrame
         self.primaryScreenHeight = primaryScreenHeight
+        self.screenHeight = screenHeight ?? primaryScreenHeight
     }
 }
 
@@ -32,10 +35,26 @@ public enum ScreenGeometry {
                       width: Int(width), height: Int(pageHeight))
     }
 
+    /// How much lower than the window's place to ask Dia for. Dia converts a popup's position with the height of the
+    /// screen it goes on instead of the main screen's, so on a screen of another height it lands off by the
+    /// difference: 323pt higher on a 1440pt Studio Display beside a 1117pt main laptop screen.
+    public static func diaTopOffset(on screen: ScreenContext) -> Int {
+        Int((screen.screenHeight - screen.primaryScreenHeight).rounded())
+    }
+
     /// The page area of a browser window whose title bar and address row (`chromeHeight`) sit above it.
     public static func pageBounds(ofWindow frame: CGRect, chromeHeight: CGFloat) -> Bounds {
         Bounds(left: Int(frame.minX), top: Int(frame.minY + chromeHeight),
                width: Int(frame.width), height: Int(frame.height - chromeHeight))
+    }
+
+    /// Where a browser window opened for page area `bounds` should be (its top-left corner), if it isn't there: Dia
+    /// places a popup on a display other than the main one higher than asked. Nil when it's within `tolerance`.
+    public static func requestedOrigin(ofWindow frame: CGRect, bounds: Bounds, tolerance: CGFloat = 6) -> CGPoint? {
+        // The browser's title bar and address row sit above the page area, so line up the bottom edge.
+        let origin = CGPoint(x: CGFloat(bounds.left), y: CGFloat(bounds.top + bounds.height) - frame.height)
+        guard abs(frame.minX - origin.x) > tolerance || abs(frame.minY - origin.y) > tolerance else { return nil }
+        return origin
     }
 
     public static func appKitRect(fromTopLeft rect: CGRect, primaryScreenHeight: CGFloat) -> CGRect {

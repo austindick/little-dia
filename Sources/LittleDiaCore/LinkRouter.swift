@@ -112,7 +112,8 @@ public final class LinkRouter {
             !before.contains($0.id) && abs($0.frame.width - CGFloat(bounds.width)) <= CGFloat(bounds.width) * 0.05
         }
         let request = OpenRequest(requestId: makeRequestID(), url: url, bounds: bounds, focused: true,
-                                  chromeHeight: Int(chromeHeight.rounded()))
+                                  chromeHeight: Int(chromeHeight.rounded()),
+                                  topOffset: ScreenGeometry.diaTopOffset(on: screenContext))
 
         // Watch for the popup while the extension is still answering, and bring the browser forward the instant it
         // appears: the popup is drawn behind the current app until then. Once the extension confirms, the popup has

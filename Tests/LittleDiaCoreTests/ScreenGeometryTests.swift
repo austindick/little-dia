@@ -95,6 +95,23 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(matchLittleWindow(twins, bounds: target, excluding: [], preferring: 9) == 1)
 }
 
+@Test func diaIsAskedForASpotOffsetByTheDifferenceInScreenHeights() {
+    // Dia converts a popup's position with the height of the screen it goes on, not the main screen's: on a
+    // 1440pt Studio Display beside a 1117pt main laptop screen, it lands 323pt higher than asked.
+    let studio = ScreenContext(visibleFrame: CGRect(x: 1728, y: -323, width: 2560, height: 1410), primaryScreenHeight: 1117,
+                               screenHeight: 1440)
+    #expect(ScreenGeometry.diaTopOffset(on: studio) == 323)
+    #expect(ScreenGeometry.diaTopOffset(on: primary) == 0)
+}
+
+@Test func aWindowPlacedHigherIsMovedBackToWhereItWasAskedFor() {
+    // Asked for page 300,137 1000x750; Dia added its 72pt title bar above but put the window at the top of the screen.
+    #expect(ScreenGeometry.requestedOrigin(ofWindow: CGRect(x: 300, y: 30, width: 1000, height: 822), bounds: target)
+            == CGPoint(x: 300, y: 65))
+    // Where it was asked for (within a few points): left alone.
+    #expect(ScreenGeometry.requestedOrigin(ofWindow: CGRect(x: 301, y: 63, width: 1000, height: 822), bounds: target) == nil)
+}
+
 @Test func takesTheFocusedWindowPlacedHigherOnAnotherScreen() {   // Dia put one 250pt higher on a non-main display
     let higher = [WindowCandidate(id: 1, frame: CGRect(x: 300, y: 30, width: 1000, height: 822))]
     #expect(matchLittleWindow(higher, bounds: target, excluding: [], preferring: 1) == 1)
