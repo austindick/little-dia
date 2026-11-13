@@ -94,3 +94,13 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(matchLittleWindow(twins, bounds: target, excluding: [], preferring: 2) == 2)
     #expect(matchLittleWindow(twins, bounds: target, excluding: [], preferring: 9) == 1)
 }
+
+@Test func takesTheFocusedWindowPlacedHigherOnAnotherScreen() {   // Dia put one 250pt higher on a non-main display
+    let higher = [WindowCandidate(id: 1, frame: CGRect(x: 300, y: 30, width: 1000, height: 822))]
+    #expect(matchLittleWindow(higher, bounds: target, excluding: [], preferring: 1) == 1)
+    // Only the focused window, untracked, at the requested left and right edges.
+    #expect(matchLittleWindow(higher, bounds: target, excluding: []) == nil)
+    #expect(matchLittleWindow(higher, bounds: target, excluding: [1], preferring: 1) == nil)
+    let elsewhere = [WindowCandidate(id: 1, frame: CGRect(x: 340, y: 30, width: 1000, height: 822))]
+    #expect(matchLittleWindow(elsewhere, bounds: target, excluding: [], preferring: 1) == nil)
+}

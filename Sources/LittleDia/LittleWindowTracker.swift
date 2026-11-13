@@ -121,8 +121,25 @@ final class LittleWindowTracker {
             }
             try? await Task.sleep(for: .milliseconds(50))
         }
-        logger.error("could not find little window \(windowId) through Accessibility")
+        // What each side saw, for diagnosing a browser that places its windows differently.
+        let axFrames = axWindows(of: appElement).map { frame(of: $0).map(describe) ?? "no frame" }
+        let serverFrames = serverWindows(of: pid).map(describe)
+        logger.error("could not find little window \(windowId) through Accessibility; asked for page \(bounds.left),\(bounds.top) \(bounds.width)x\(bounds.height); accessibility windows [\(axFrames.joined(separator: ", "), privacy: .public)]; on-screen windows [\(serverFrames.joined(separator: ", "), privacy: .public)]")
         return false
+    }
+
+    private func describe(_ frame: CGRect) -> String {
+        "\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))"
+    }
+
+    /// The window server's frames for the browser's on-screen windows, any layer.
+    private func serverWindows(of pid: pid_t) -> [CGRect] {
+        let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        return raw.compactMap { info in
+            guard (info[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                  let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary else { return nil }
+            return CGRect(dictionaryRepresentation: boundsInfo)
+        }
     }
 
     /// Returns the settled frame, or nil if the window never settled (or went away) within ~1.2s.

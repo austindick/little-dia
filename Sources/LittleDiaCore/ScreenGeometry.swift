@@ -65,14 +65,22 @@ public struct WindowCandidate<ID: Hashable>: Equatable {
 /// Finds the window the browser created for `bounds`. Dia adds its title bar and address row *above* the requested
 /// page area, so only the left, right and bottom edges are compared. When several windows match, `preferring` (the
 /// browser's focused window, which a new popup always is) wins.
+///
+/// On a display other than the main one, Dia places a popup higher than asked (250pt on a Studio Display beside a
+/// laptop, pinned under the menu bar). So when nothing matches, the preferred window is taken if its left and right
+/// edges do.
 public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>], bounds: Bounds, excluding: Set<ID>,
                                             tolerance: CGFloat = 6, preferring: ID? = nil) -> ID? {
     let left = CGFloat(bounds.left)
     let right = CGFloat(bounds.left + bounds.width)
     let bottom = CGFloat(bounds.top + bounds.height)
     var best: (id: ID, score: CGFloat)?
+    var preferredSides = false
     for candidate in candidates where !excluding.contains(candidate.id) {
-        let deltas = [abs(candidate.frame.minX - left), abs(candidate.frame.maxX - right), abs(candidate.frame.maxY - bottom)]
+        let sides = [abs(candidate.frame.minX - left), abs(candidate.frame.maxX - right)]
+        guard sides.allSatisfy({ $0 <= tolerance }) else { continue }
+        if candidate.id == preferring { preferredSides = true }
+        let deltas = sides + [abs(candidate.frame.maxY - bottom)]
         guard deltas.allSatisfy({ $0 <= tolerance }) else { continue }
         if candidate.id == preferring { return candidate.id }
         let score = deltas.reduce(0, +)
@@ -80,7 +88,7 @@ public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>],
             best = (candidate.id, score)
         }
     }
-    return best?.id
+    return best?.id ?? (preferredSides ? preferring : nil)
 }
 
 public enum OverlayVisibility {
