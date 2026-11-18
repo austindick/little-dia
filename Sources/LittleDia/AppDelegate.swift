@@ -35,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var connectionProfiles: [Int: String] = [:]
     /// The little window whose buttons are showing: the focused one, with Dia in front.
     private var shownLittleWindow: Int?
+    /// The little window most recently in front while it's open, whose size the menu can make the default.
+    private var lastLittleWindow: Int?
+    /// The last resize not remembered (Remember Size After Resizing was off), while that window is open: turning the
+    /// setting on takes it, so the size on screen is the one the next windows open at.
+    private var unrememberedResize: (windowId: Int, page: Bounds)?
     private var keyMonitor: Any?
     private let addressBox = AddressBox()
     private var newLittleWindowKey: HotKey?
@@ -127,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onChange: { [weak self] window in
                 guard let self else { return }
                 self.shownLittleWindow = window?.windowId
+                if let window { self.lastLittleWindow = window.windowId }
                 if let window {
                     // The buttons hide whenever the little window loses focus, so the main window may have changed
                     // profile since they were last shown.
@@ -141,6 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onResize: { [weak self] windowId, page in
                 guard let self else { return }
+                guard self.settings.remembersResizedSize else {
+                    self.unrememberedResize = (windowId, page)
+                    self.logger.notice("little window \(windowId) resized to \(page.width)x\(page.height); not remembered (Remember Size After Resizing is off)")
+                    return
+                }
                 self.settings.rememberSize(page)
                 self.logger.notice("little window \(windowId) resized; next ones open at \(page.width)x\(page.height)")
             },
@@ -185,6 +196,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater = Updater(settings: settings)
         statusMenu = StatusMenu(settings: settings,
                                 newLittleWindow: { [weak self] in self?.newLittleWindow() },
+                                currentLittleWindowSize: { [weak self] in self?.currentLittleWindowSize() },
+                                useCurrentLittleWindowSize: { [weak self] in self?.useCurrentLittleWindowSize() },
+                                remembersResizedSizeChanged: { [weak self] in self?.remembersResizedSizeChanged() },
                                 status: { [weak self] in self?.setupStatus() ?? .unknown },
                                 showSetup: { [weak self] in self?.showSetup() },
                                 copyDiagnostics: { [weak self] in self?.copyDiagnostics() },
@@ -263,9 +277,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .littleHistory(windowId, canGoBack):
             overlay.setCanGoBack(canGoBack, windowId: windowId)
         case let .littleBounds(_, bounds):
-            settings.rememberSize(bounds)
+            if settings.remembersResizedSize { settings.rememberSize(bounds) }
         case let .littleClosed(windowId):
             tracker.untrack(windowId: windowId)
+            if lastLittleWindow == windowId { lastLittleWindow = nil }
+            if unrememberedResize?.windowId == windowId { unrememberedResize = nil }
             Task { await focusReturn.handle(message) }
         case .littleMoved:
             Task { await focusReturn.handle(message) }
@@ -408,6 +424,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             logger.notice("extension \(version, privacy: .public) still differs from the bundled \(bundled, privacy: .public); Dia may be loading it from a folder other than \(self.extensionFolder.path, privacy: .public)")
         }
+    }
+
+    // MARK: Little window size
+
+    /// The page area of the little window most recently in front, if it's still open.
+    private func currentLittleWindowSize() -> Bounds? {
+        lastLittleWindow.flatMap { tracker.pageBounds(ofWindow: $0) }
+    }
+
+    private func useCurrentLittleWindowSize() {
+        guard let page = currentLittleWindowSize() else { return }
+        settings.rememberSize(page)
+        logger.notice("new little windows open at \(page.width)x\(page.height), from little window \(self.lastLittleWindow ?? 0)")
+    }
+
+    private func remembersResizedSizeChanged() {
+        guard settings.remembersResizedSize, let resize = unrememberedResize else { return }
+        unrememberedResize = nil
+        settings.rememberSize(resize.page)
+        logger.notice("Remember Size After Resizing turned on; next ones open at \(resize.page.width)x\(resize.page.height), as little window \(resize.windowId) was resized")
     }
 
     // MARK: Title-bar buttons

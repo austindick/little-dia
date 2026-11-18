@@ -89,3 +89,13 @@ export function isWebURL(url) {
     return false;
   }
 }
+
+/**
+ * Whether a tab opened from a little window (whose window is `source`: its windowId and its own tabId) should open in
+ * a little window instead. Dia puts such a tab in the main window, sometimes after first putting it in the little
+ * window itself. A popup of its own (window.open with a size, such as a sign-in window) stays as it is.
+ */
+export function opensAsLittleWindow(tab, tabWindow, source) {
+  if (tab.id === source.tabId) return false;
+  return tabWindow.type === "normal" || tab.windowId === source.windowId;
+}

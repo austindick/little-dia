@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -110,4 +110,17 @@ test("isWebURL accepts only http and https", () => {
                      "about:blank", "not a url", ""]) {
     assert.equal(isWebURL(url), false, url);
   }
+});
+
+test("opensAsLittleWindow takes a new tab Dia put in the main window or in the little window itself", () => {
+  // Spotify's share button (2026-11-13): Dia put the new tab in the little window first, then moved it to the main one.
+  const source = { windowId: 7, tabId: 70 };
+  assert.equal(opensAsLittleWindow({ id: 71, windowId: 1 }, { type: "normal" }, source), true);
+  assert.equal(opensAsLittleWindow({ id: 71, windowId: 7 }, { id: 7, type: "popup" }, source), true);
+});
+
+test("opensAsLittleWindow leaves a popup of its own, such as a sign-in window, and the little window's own tab", () => {
+  const source = { windowId: 7, tabId: 70 };
+  assert.equal(opensAsLittleWindow({ id: 71, windowId: 9 }, { id: 9, type: "popup" }, source), false);
+  assert.equal(opensAsLittleWindow({ id: 70, windowId: 7 }, { id: 7, type: "popup" }, source), false);
 });

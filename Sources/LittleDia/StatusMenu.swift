@@ -7,6 +7,9 @@ import LittleDiaCore
 final class StatusMenu: NSObject, NSMenuDelegate {
     private let settings: UserDefaultsSettings
     private let newLittleWindow: () -> Void
+    private let currentLittleWindowSize: () -> Bounds?
+    private let useCurrentLittleWindowSize: () -> Void
+    private let remembersResizedSizeChanged: () -> Void
     private let status: () -> SetupStatus
     private let showSetup: () -> Void
     private let copyDiagnostics: () -> Void
@@ -17,12 +20,17 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
-    init(settings: UserDefaultsSettings, newLittleWindow: @escaping () -> Void, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
+    init(settings: UserDefaultsSettings, newLittleWindow: @escaping () -> Void,
+         currentLittleWindowSize: @escaping () -> Bounds?, useCurrentLittleWindowSize: @escaping () -> Void,
+         remembersResizedSizeChanged: @escaping () -> Void, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
          copyDiagnostics: @escaping () -> Void, updateOffer: @escaping () -> UpdateOffer?,
          checkForUpdates: @escaping () -> Void, installUpdate: @escaping (UpdateOffer) -> Void,
          isUpdating: @escaping () -> Bool) {
         self.settings = settings
         self.newLittleWindow = newLittleWindow
+        self.currentLittleWindowSize = currentLittleWindowSize
+        self.useCurrentLittleWindowSize = useCurrentLittleWindowSize
+        self.remembersResizedSizeChanged = remembersResizedSizeChanged
         self.status = status
         self.showSetup = showSetup
         self.copyDiagnostics = copyDiagnostics
@@ -55,6 +63,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             guard let self else { return }
             settings.isEnabled.toggle()
         })
+        menu.addItem(sizeItem())
         menu.addItem(.separator())
 
         let line = status().menuLine
@@ -85,6 +94,35 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         let quit = NSMenuItem(title: "Quit Little Dia", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
+    }
+
+    /// "Little Window Size": the size new little windows open at, a way to set it from the little window in front, and
+    /// whether resizing one sets it.
+    private func sizeItem() -> NSMenuItem {
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false   // "Use Current Window's Size" is greyed out when it would change nothing
+        let size = settings.littleWindowSize
+        let opensAt = NSMenuItem(title: "New Ones Open at \(Int(size.width)) × \(Int(size.height))", action: nil, keyEquivalent: "")
+        opensAt.isEnabled = false
+        submenu.addItem(opensAt)
+        if let current = currentLittleWindowSize() {
+            let use = action("Use Current Window's Size (\(current.width) × \(current.height))", useCurrentLittleWindowSize)
+            use.isEnabled = CGSize(width: current.width, height: current.height) != size
+            submenu.addItem(use)
+        } else {
+            let use = NSMenuItem(title: "Use Current Window's Size", action: nil, keyEquivalent: "")
+            use.isEnabled = false
+            submenu.addItem(use)
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(action("Remember Size After Resizing", checked: settings.remembersResizedSize) { [weak self] in
+            guard let self else { return }
+            settings.remembersResizedSize.toggle()
+            remembersResizedSizeChanged()
+        })
+        let item = NSMenuItem(title: "Little Window Size", action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        return item
     }
 
     /// The standard About panel, with the project link and the not-affiliated line.

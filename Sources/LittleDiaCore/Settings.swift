@@ -16,6 +16,7 @@ public final class UserDefaultsSettings: LittleSettings {
         static let enabled = "enabled"
         static let width = "littleWindowWidth"
         static let height = "littleWindowHeight"
+        static let remembersResizedSize = "remembersResizedSize"
         static let browser = "browserBundleID"
         static let chromeHeight = "chromeHeight"
         static let hasLaunchedBefore = "hasLaunchedBefore"
@@ -30,6 +31,7 @@ public final class UserDefaultsSettings: LittleSettings {
             Key.enabled: true,
             Key.width: 1200.0,
             Key.height: 750.0,
+            Key.remembersResizedSize: false,
             Key.browser: BrowserAdapter.dia.bundleID,   // chosen by the 2026-10-23 same-desktop spike
         ])
     }
@@ -41,6 +43,13 @@ public final class UserDefaultsSettings: LittleSettings {
 
     public var littleWindowSize: CGSize {
         CGSize(width: defaults.double(forKey: Key.width), height: defaults.double(forKey: Key.height))
+    }
+
+    /// Whether resizing a little window sets the size the next ones open at. Off by default: some people want every
+    /// little window at the same size, and set it from the menu instead.
+    public var remembersResizedSize: Bool {
+        get { defaults.bool(forKey: Key.remembersResizedSize) }
+        set { defaults.set(newValue, forKey: Key.remembersResizedSize) }
     }
 
     public var browser: BrowserAdapter {
@@ -69,8 +78,8 @@ public final class UserDefaultsSettings: LittleSettings {
         defaults.set(Double(height), forKey: Key.chromeHeight)
     }
 
-    /// Little windows open at the size the user last resized one to (page area, without the browser's title bar).
-    /// A size below the minimum isn't one a person chose (a window's thumbnail in Mission Control, say) and is ignored.
+    /// Sets the size little windows open at (page area, without the browser's title bar). A size below the minimum
+    /// isn't one a person chose (a window's thumbnail in Mission Control, say) and is ignored.
     public func rememberSize(_ bounds: Bounds) {
         guard CGFloat(bounds.width) >= ScreenGeometry.minimumSize.width,
               CGFloat(bounds.height) >= ScreenGeometry.minimumSize.height else { return }

@@ -19,7 +19,7 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
 }
 
 @Test func enforcesMinimum() {
-    #expect(ScreenGeometry.littleWindowBounds(size: CGSize(width: 100, height: 100), on: primary) == Bounds(left: 560, top: 332, width: 480, height: 360))
+    #expect(ScreenGeometry.littleWindowBounds(size: CGSize(width: 100, height: 100), on: primary) == Bounds(left: 700, top: 452, width: 200, height: 120))
 }
 
 @Test func floorsFractions() {

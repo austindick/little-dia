@@ -308,6 +308,8 @@ final class LittleWindowTracker {
             dragStart = shown
             onChange(nil)
         case .ended(let byHand):
+            // Whether a resize counts depends on this; logged so a missed one can be told from one never seen.
+            logger.notice("little window \(shown.windowId) stopped moving \(byHand ? "by hand" : "on its own", privacy: .public) at \(self.describe(frame), privacy: .public)")
             finishMoving(byHand: byHand)
         case nil:
             break
@@ -349,6 +351,12 @@ final class LittleWindowTracker {
         guard let entry = entries[start.windowId], let end = frame(of: entry.element) else { return }
         guard abs(end.width - start.frameTopLeft.width) > 1 || abs(end.height - start.frameTopLeft.height) > 1 else { return }
         onResize(start.windowId, ScreenGeometry.pageBounds(ofWindow: end, chromeHeight: entry.chromeHeight))
+    }
+
+    /// The page area of a tracked little window as it is now: its browser frame minus the title bar and address row.
+    func pageBounds(ofWindow windowId: Int) -> Bounds? {
+        guard let entry = entries[windowId], let frame = frame(of: entry.element) else { return nil }
+        return ScreenGeometry.pageBounds(ofWindow: frame, chromeHeight: entry.chromeHeight)
     }
 
     private func serverInfo(of number: CGWindowID) -> (frame: CGRect, onScreen: Bool)? {

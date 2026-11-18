@@ -39,10 +39,31 @@ import Testing
     settings.rememberSize(Bounds(left: 0, top: 0, width: 1364, height: 797))
     settings.rememberSize(Bounds(left: 0, top: 0, width: 103, height: -4))
     #expect(settings.littleWindowSize == CGSize(width: 1364, height: 797))
-    settings.rememberSize(Bounds(left: 0, top: 0, width: 900, height: 300))
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 900, height: 100))
     #expect(settings.littleWindowSize == CGSize(width: 1364, height: 797))
-    settings.rememberSize(Bounds(left: 0, top: 0, width: 480, height: 360))   // the minimum itself is fine
-    #expect(settings.littleWindowSize == CGSize(width: 480, height: 360))
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 200, height: 120))   // the minimum itself is fine
+    #expect(settings.littleWindowSize == CGSize(width: 200, height: 120))
+}
+
+/// Owner, 2026-11-13: a little window dragged to 233pt tall was thrown away under the old 480x360 minimum.
+@MainActor @Test func settingsRemembersAShortWindow() {
+    let suite = "ld-test-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = UserDefaultsSettings(defaults: defaults)
+    settings.rememberSize(Bounds(left: 0, top: 0, width: 1506, height: 233))
+    #expect(settings.littleWindowSize == CGSize(width: 1506, height: 233))
+}
+
+/// Owner, 2026-11-13: some people want every little window at the same size, however they resize one.
+@MainActor @Test func resizingIsRememberedOnlyWhenTurnedOn() {
+    let suite = "ld-test-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = UserDefaultsSettings(defaults: defaults)
+    #expect(!settings.remembersResizedSize)
+    settings.remembersResizedSize = true
+    #expect(UserDefaultsSettings(defaults: defaults).remembersResizedSize)
 }
 
 @MainActor @Test func settingsRemembersAPlausibleChromeHeight() {

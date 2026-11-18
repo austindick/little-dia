@@ -1,6 +1,6 @@
 // Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow } from "./bridge-logic.js";
 
 const HOST = "com.austindick.littledia.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used only if the app didn't send its measurement.
@@ -241,19 +241,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
-// Backstop for new tabs the content script couldn't catch (e.g. window.open from page scripts): a new *tab* opened
-// from a little window lands in the main window, so move it into a little window. Real popups stay as they are.
-// Only web pages move: a page script could otherwise open a data: or chrome:// URL as a top-level page, which Chrome
-// blocks pages from doing themselves.
+// Backstop for new tabs the content script couldn't catch (e.g. window.open from page scripts): Dia puts a new *tab*
+// opened from a little window in the main window, sometimes after first putting it in the little window itself, so
+// open it in a little window instead. Real popups stay as they are (see opensAsLittleWindow). Only web pages move: a
+// page script could otherwise open a data: or chrome:// URL as a top-level page, which Chrome blocks pages from doing
+// themselves.
 chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
   if (!isWebURL(details.url)) return;
   const { littleWindows } = await getState();
   const sourceTab = await chrome.tabs.get(details.sourceTabId).catch(() => null);
-  if (!sourceTab || !littleWindows[sourceTab.windowId]) return;
+  const source = sourceTab && littleWindows[sourceTab.windowId];
+  if (!source) return;
   const newTab = await chrome.tabs.get(details.tabId).catch(() => null);
   if (!newTab) return;
   const newWindow = await chrome.windows.get(newTab.windowId).catch(() => null);
-  if (!newWindow || newWindow.type !== "normal") return;
+  if (!newWindow || !opensAsLittleWindow(newTab, newWindow, { windowId: sourceTab.windowId, tabId: source.tabId })) return;
   await chrome.tabs.remove(details.tabId);
+  post({ type: "log", message: `new tab from little window ${sourceTab.windowId} (in a ${newWindow.type} window) opens in a little window` });
   await openFromLittleWindow(sourceTab.windowId, details.url);
 });

@@ -18,7 +18,8 @@ public struct ScreenContext: Equatable, Sendable {
 
 public enum ScreenGeometry {
     public static let screenMargin: CGFloat = 40
-    public static let minimumSize = CGSize(width: 480, height: 360)
+    /// Small enough for any size a person drags a little window to; only nonsense (a Mission Control thumbnail) is below.
+    public static let minimumSize = CGSize(width: 200, height: 120)
 
     /// Centers a little window on `screen` and returns its page area in top-left coordinates. `size` is the page area
     /// (clamped to the minimum); `chromeHeight` is what the browser adds above it (Dia: its title bar and address row).
