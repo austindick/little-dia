@@ -853,6 +853,51 @@ private final class EmphasizedRowView: NSTableRowView {
         NSColor.selectedContentBackgroundColor.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius).fill()
     }
+
+    // MARK: Hover
+    // A faint version of the selection's shape under the pointer, lighter than the selection so the row ↑/↓ chose
+    // still stands out. The box never becomes the active window, so the tracking is always on.
+
+    private var isHovered = false {
+        didSet { if isHovered != oldValue { needsDisplay = true } }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if trackingAreas.isEmpty {
+            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+                                           owner: self))
+        }
+    }
+
+    // A row opens its page when clicked, so it shows the pointing hand. Cursor rects only apply while this app is
+    // active, and the box never activates it, so the cursor is set on every entry and move instead.
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        NSCursor.pointingHand.set()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.pointingHand.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        NSCursor.arrow.set()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        isHovered = false
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isHovered, !isSelected else { return }
+        NSColor.labelColor.withAlphaComponent(0.08).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+    }
 }
 
 /// Dia's logo in flat grey, the placeholder text's colour. The shape comes from Dia's own flat logo, so none of Dia's
@@ -1036,20 +1081,24 @@ private final class KeyCapView: NSView {
         if isPressed { key.size.height -= 2 }
         let face = NSRect(x: key.minX + line, y: key.minY + edge, width: key.width - 2 * line, height: key.height - edge - line)
 
-        // The key minus its face: thin at the top and sides, thick along the bottom.
+        // Partly opaque: the box's frosted glass takes on the tint of whatever is behind it, and a see-through key
+        // went dark (or, in dark mode, light) with it; a solid one stood out from the box. This keeps some of the tint.
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let lit = isHovered || isPressed   // hovered (and held), the face lightens
+        let faceColor = dark ? NSColor(white: lit ? 0.34 : 0.22, alpha: 0.55) : NSColor(white: 1, alpha: lit ? 0.9 : 0.55)
+        let edgeColor = NSColor(white: dark ? 0.55 : 0.6, alpha: 0.6)
+
+        // The key minus its face: thin at the top and sides, thick along the bottom. (Drawn apart, so the
+        // see-through colours don't stack.)
         let outline = NSBezierPath(roundedRect: key, xRadius: radius, yRadius: radius)
         outline.append(NSBezierPath(roundedRect: face, xRadius: radius - line, yRadius: radius - line))
         outline.windingRule = .evenOdd
-        NSColor.tertiaryLabelColor.setFill()
+        edgeColor.setFill()
         outline.fill()
-        // Hovered (and held), the face lightens.
-        if isHovered || isPressed {
-            let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            NSColor.white.withAlphaComponent(dark ? 0.12 : 0.6).setFill()
-            NSBezierPath(roundedRect: face, xRadius: radius - line, yRadius: radius - line).fill()
-        }
+        faceColor.setFill()
+        NSBezierPath(roundedRect: face, xRadius: radius - line, yRadius: radius - line).fill()
 
-        let color = NSColor.secondaryLabelColor
+        let color = NSColor(white: dark ? 0.85 : 0.35, alpha: 0.9)
         let text = NSAttributedString(string: label, attributes: [
             .font: NSFont.systemFont(ofSize: fontSize, weight: .medium), .foregroundColor: color,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): color.cgColor,
