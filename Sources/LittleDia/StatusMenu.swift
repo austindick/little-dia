@@ -12,6 +12,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let currentLittleWindowSize: () -> Bounds?
     private let useCurrentLittleWindowSize: () -> Void
     private let remembersResizedSizeChanged: () -> Void
+    private let cleanupInterval: () -> TimeInterval?
     private let status: () -> SetupStatus
     private let showSetup: () -> Void
     private let copyDiagnostics: () -> Void
@@ -25,7 +26,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     init(settings: UserDefaultsSettings, newLittleWindow: @escaping () -> Void,
          hasRecentPages: @escaping () -> Bool, clearRecentPages: @escaping () -> Void,
          currentLittleWindowSize: @escaping () -> Bounds?, useCurrentLittleWindowSize: @escaping () -> Void,
-         remembersResizedSizeChanged: @escaping () -> Void, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
+         remembersResizedSizeChanged: @escaping () -> Void, cleanupInterval: @escaping () -> TimeInterval?,
+         status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
          copyDiagnostics: @escaping () -> Void, updateOffer: @escaping () -> UpdateOffer?,
          checkForUpdates: @escaping () -> Void, installUpdate: @escaping (UpdateOffer) -> Void,
          isUpdating: @escaping () -> Bool) {
@@ -36,6 +38,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         self.currentLittleWindowSize = currentLittleWindowSize
         self.useCurrentLittleWindowSize = useCurrentLittleWindowSize
         self.remembersResizedSizeChanged = remembersResizedSizeChanged
+        self.cleanupInterval = cleanupInterval
         self.status = status
         self.showSetup = showSetup
         self.copyDiagnostics = copyDiagnostics
@@ -73,6 +76,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             guard let self else { return }
             settings.isEnabled.toggle()
         })
+        menu.addItem(closeInactiveItem())
         menu.addItem(sizeItem())
         menu.addItem(.separator())
 
@@ -104,6 +108,20 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         let quit = NSMenuItem(title: "Quit Little Dia", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
+    }
+
+    /// Closes little windows nobody has had in front for Dia's tab-cleanup interval. Greyed out while Dia's cleanup is
+    /// off, since there's no interval to use.
+    private func closeInactiveItem() -> NSMenuItem {
+        let interval = cleanupInterval()
+        let title = interval.map { "Close Inactive Little Windows After \(DiaTabCleanup.label($0))" }
+            ?? "Close Inactive Little Windows (Off in Dia)"
+        let item = action(title, checked: settings.closesInactiveLittleWindows) { [weak self] in
+            self?.settings.closesInactiveLittleWindows.toggle()
+        }
+        item.isEnabled = interval != nil
+        if interval == nil { item.toolTip = "Turn on cleaning up inactive tabs in Dia's settings to use this." }
+        return item
     }
 
     /// "Little Window Size": the size new little windows open at, a way to set it from the little window in front, and

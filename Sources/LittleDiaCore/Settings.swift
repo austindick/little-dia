@@ -21,6 +21,8 @@ public final class UserDefaultsSettings: LittleSettings {
         static let chromeHeight = "chromeHeight"
         static let hasLaunchedBefore = "hasLaunchedBefore"
         static let lastUpdateCheck = "lastUpdateCheck"
+        static let closesInactive = "closeInactiveLittleWindows"
+        static let inactiveCloseSecondsOverride = "inactiveCloseSecondsOverride"
     }
 
     private let defaults: UserDefaults
@@ -32,6 +34,7 @@ public final class UserDefaultsSettings: LittleSettings {
             Key.width: 1200.0,
             Key.height: 750.0,
             Key.remembersResizedSize: false,
+            Key.closesInactive: false,
             Key.browser: BrowserAdapter.dia.bundleID,   // chosen by the 2026-10-23 same-desktop spike
         ])
     }
@@ -50,6 +53,19 @@ public final class UserDefaultsSettings: LittleSettings {
     public var remembersResizedSize: Bool {
         get { defaults.bool(forKey: Key.remembersResizedSize) }
         set { defaults.set(newValue, forKey: Key.remembersResizedSize) }
+    }
+
+    /// Whether little windows nobody has looked at for Dia's tab-cleanup interval are closed. Off by default, so
+    /// updating never starts closing anyone's windows.
+    public var closesInactiveLittleWindows: Bool {
+        get { defaults.bool(forKey: Key.closesInactive) }
+        set { defaults.set(newValue, forKey: Key.closesInactive) }
+    }
+
+    /// For trying the closing out without waiting hours: seconds to use in place of Dia's interval. Set only by hand
+    /// (`defaults write`).
+    public var inactiveCloseSecondsOverride: TimeInterval? {
+        (defaults.object(forKey: Key.inactiveCloseSecondsOverride) as? Double).flatMap { $0 > 0 ? $0 : nil }
     }
 
     public var browser: BrowserAdapter {

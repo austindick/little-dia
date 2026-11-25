@@ -62,6 +62,9 @@ Reopen it any time from the menu bar: *Setup…*.
 - Closing a little window puts you back in the app you came from.
 - Little windows open at the same size every time. To change it, resize one and choose *Little Window Size → Use
   Current Window's Size* in the menu, or turn on *Remember Size After Resizing* there so each resize sets it.
+- Turn on *Close Inactive Little Windows* in the menu to close little windows you haven't had in front for as long as
+  Dia's own "clean up inactive tabs" setting (12 hours unless you've changed it). It's off until you turn it on, and
+  greyed out while Dia's cleanup is off. Closed pages stay in **Show recent**.
 - If Dia isn't running, links open in its main window as usual; little windows start once Dia is open.
 - Turn little windows off any time with *Open Links in Little Windows* in the menu.
 

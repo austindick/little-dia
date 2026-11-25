@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyMonitor: Any?
     private let addressBox = AddressBox()
     private let recentPages = RecentPages()
+    /// When each little window was last in front, for closing the ones nobody has looked at in a while.
+    private let inactiveWindows = InactiveWindows()
+    private var inactiveSweep: Timer?
     /// The Recent list's site icons, from Dia's icon store via the extension.
     private let siteIcons = SiteIcons(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Little Dia/Site Icons", isDirectory: true))
@@ -136,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onChange: { [weak self] window in
                 guard let self else { return }
                 self.shownLittleWindow = window?.windowId
+                self.inactiveWindows.noteInFront(window?.windowId, now: Date())
                 if let window { self.lastLittleWindow = window.windowId }
                 if let window {
                     // The buttons hide whenever the little window loses focus, so the main window may have changed
@@ -209,6 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 currentLittleWindowSize: { [weak self] in self?.currentLittleWindowSize() },
                                 useCurrentLittleWindowSize: { [weak self] in self?.useCurrentLittleWindowSize() },
                                 remembersResizedSizeChanged: { [weak self] in self?.remembersResizedSizeChanged() },
+                                cleanupInterval: { [weak self] in self?.inactiveCloseInterval() },
                                 status: { [weak self] in self?.setupStatus() ?? .unknown },
                                 showSetup: { [weak self] in self?.showSetup() },
                                 copyDiagnostics: { [weak self] in self?.copyDiagnostics() },
@@ -228,6 +233,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings.hasLaunchedBefore = true
         }
         updater.startAutomaticChecks()
+        inactiveSweep = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closeInactiveLittleWindows() }
+        }
         // Open the setup window if a step is unfinished. When Dia is running, give its extension time to connect
         // first, so a set-up Mac doesn't flash the window on every launch: a few seconds normally, and up to a minute
         // more (the extension's reconnect alarm) when Dia's files show the extension is installed.
@@ -296,6 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch message {
         case let .opened(_, windowId, url, bounds):
             recentPages.note(windowId: windowId, url: url, title: nil)
+            inactiveWindows.noteOpened(windowId, now: Date())
             if let pid = server.browserPID(for: bundleID) {
                 Task { _ = await tracker.track(windowId: windowId, bounds: bounds, browserPID: pid, chromeHeight: settings.chromeHeight) }
             }
@@ -308,6 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .littleClosed(windowId):
             tracker.untrack(windowId: windowId)
             recentPages.windowClosed(windowId)
+            inactiveWindows.noteClosed(windowId)
             if lastLittleWindow == windowId { lastLittleWindow = nil }
             if unrememberedResize?.windowId == windowId { unrememberedResize = nil }
             Task { await focusReturn.handle(message) }
@@ -375,6 +385,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Diagnostics
 
+    // MARK: Closing inactive little windows
+
+    /// How long a little window can go without being in front before it's closed: Dia's tab-cleanup interval (nil
+    /// while that's off), or the hand-set override for trying it out.
+    private func inactiveCloseInterval() -> TimeInterval? {
+        settings.inactiveCloseSecondsOverride ?? DiaTabCleanup.read()
+    }
+
+    /// Runs every minute: closes the little windows nobody has had in front for the interval, when that's turned on.
+    /// Their pages stay in Recent.
+    private func closeInactiveLittleWindows() {
+        guard settings.closesInactiveLittleWindows, let interval = inactiveCloseInterval() else { return }
+        for id in inactiveWindows.due(now: Date(), after: interval) {
+            focusReturn.forget(id)   // nobody closed it, so don't switch apps when it goes
+            let result = tracker.pressClose(windowId: id).map { "\($0.rawValue)" } ?? "not tracked"
+            inactiveWindows.noteClosed(id)   // tried once; not again every minute
+            // Dia can close the window before Accessibility answers, so whether it went is the extension's
+            // littleClosed, not the press's result.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { return }
+                if self.registry.info(for: id) == nil {
+                    self.logger.notice("closed inactive little window \(id) after \(DiaTabCleanup.label(interval), privacy: .public) (close button: \(result, privacy: .public))")
+                } else {
+                    self.logger.error("inactive little window \(id) is still open (close button: \(result, privacy: .public))")
+                }
+            }
+        }
+    }
+
     /// Puts versions, setup status and the last hour of this app's log on the clipboard (URLs scrubbed).
     private func copyDiagnostics() {
         let info = Bundle.main.infoDictionary
@@ -385,6 +425,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                                       browserVersion: browserVersion, status: setupStatus(), profiles: loadProfiles(),
                                       chromeHeight: settings.chromeHeight, stageManager: SystemIntegration.stageManagerIsOn,
+                                      closesInactive: settings.closesInactiveLittleWindows, cleanupInterval: DiaTabCleanup.read(),
                                       logLines: recentLogLines())
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

@@ -8,7 +8,7 @@ public enum Diagnostics {
 
     public static func report(appVersion: String, extensionVersion: String?, macOSVersion: String, browserVersion: String?,
                               status: SetupStatus, profiles: BrowserProfiles?, chromeHeight: CGFloat, stageManager: Bool,
-                              logLines: [String]) -> String {
+                              closesInactive: Bool, cleanupInterval: TimeInterval?, logLines: [String]) -> String {
         let profileLine = profiles.map { "\($0.all.joined(separator: ", ")) (extension in \($0.withExtension.joined(separator: ", ")))" } ?? "none found"
         let facts = [
             "Little Dia diagnostics",
@@ -24,6 +24,7 @@ public enum Diagnostics {
             "Profiles: \(profileLine)",
             "Title bar: \(Int(chromeHeight.rounded()))pt",
             "Stage Manager: \(stageManager ? "on" : "off")",
+            "Close inactive: \(closesInactive ? "on" : "off"); Dia: \(cleanupInterval.map(DiaTabCleanup.label) ?? "off")",
             "",
             "Recent log:",
         ]

@@ -6,17 +6,23 @@ private let allSet = SetupStatus(isDefaultBrowser: true, extensionState: .connec
                                  browserPinnedToDesktop: false, profile: "Work")
 
 private func report(extensionVersion: String? = "0.2.0", profiles: BrowserProfiles? = BrowserProfiles(current: "Work", others: ["Personal"]),
-                    logLines: [String] = []) -> String {
+                    closesInactive: Bool = true, cleanupInterval: TimeInterval? = 86400, logLines: [String] = []) -> String {
     Diagnostics.report(appVersion: "1.0.0", extensionVersion: extensionVersion, macOSVersion: "26.7", browserVersion: "1.54.2",
-                       status: allSet, profiles: profiles, chromeHeight: 72, stageManager: true, logLines: logLines)
+                       status: allSet, profiles: profiles, chromeHeight: 72, stageManager: true,
+                       closesInactive: closesInactive, cleanupInterval: cleanupInterval, logLines: logLines)
 }
 
 @Test func reportListsVersionsAndStatus() {
     let text = report()
     for line in ["App: 1.0.0", "Extension: 0.2.0", "Dia: 1.54.2", "Status: All set · Work",
-                 "Profiles: Personal, Work (extension in Work)", "Title bar: 72pt", "Stage Manager: on"] {
+                 "Profiles: Personal, Work (extension in Work)", "Title bar: 72pt", "Stage Manager: on",
+                 "Close inactive: on; Dia: 24 Hours"] {
         #expect(text.contains(line), "missing \(line)")
     }
+}
+
+@Test func reportSaysWhenDiasCleanupIsOff() {
+    #expect(report(closesInactive: false, cleanupInterval: nil).contains("Close inactive: off; Dia: off"))
 }
 
 @Test func reportScrubsURLs() {   // diagnostics get pasted into Slack; never leak what people browse

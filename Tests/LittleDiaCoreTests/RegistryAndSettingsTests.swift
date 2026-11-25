@@ -99,3 +99,16 @@ import Testing
     registry.apply(.littleHistory(windowId: 42, canGoBack: false), from: "company.thebrowser.dia")
     #expect(registry.info(for: 42)?.canGoBack == false)
 }
+
+@MainActor @Test func closingInactiveLittleWindowsIsOffUntilTurnedOn() {
+    let suite = "ld-test-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = UserDefaultsSettings(defaults: defaults)
+    #expect(!settings.closesInactiveLittleWindows)
+    #expect(settings.inactiveCloseSecondsOverride == nil)
+    settings.closesInactiveLittleWindows = true
+    #expect(UserDefaultsSettings(defaults: defaults).closesInactiveLittleWindows)
+    defaults.set(120.0, forKey: "inactiveCloseSecondsOverride")
+    #expect(UserDefaultsSettings(defaults: defaults).inactiveCloseSecondsOverride == 120)
+}

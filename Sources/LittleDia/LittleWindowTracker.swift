@@ -194,11 +194,17 @@ final class LittleWindowTracker {
 
     /// Presses the window's close button, exactly as clicking it would. False if the window isn't tracked or has none.
     func close(windowId: Int) -> Bool {
-        guard let element = entries[windowId]?.element else { return false }
+        pressClose(windowId: windowId) == .success
+    }
+
+    /// Presses the window's close button and returns what Accessibility said, or nil if the window isn't tracked or
+    /// has no close button. Dia can close the window before answering, so an error here doesn't mean it stayed open.
+    func pressClose(windowId: Int) -> AXError? {
+        guard let element = entries[windowId]?.element else { return nil }
         var button: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXCloseButtonAttribute as CFString, &button) == .success,
-              let button, CFGetTypeID(button) == AXUIElementGetTypeID() else { return false }
-        return AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success
+              let button, CFGetTypeID(button) == AXUIElementGetTypeID() else { return nil }
+        return AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString)
     }
 
     /// Makes the window its app's front window, so bringing the app forward shows this one. False if it isn't
