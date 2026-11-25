@@ -8,13 +8,13 @@ private let allSet = SetupStatus(isDefaultBrowser: true, extensionState: .connec
 private func report(extensionVersion: String? = "0.2.0", profiles: BrowserProfiles? = BrowserProfiles(current: "Work", others: ["Personal"]),
                     logLines: [String] = []) -> String {
     Diagnostics.report(appVersion: "1.0.0", extensionVersion: extensionVersion, macOSVersion: "26.7", browserVersion: "1.54.2",
-                       status: allSet, profiles: profiles, chromeHeight: 72, logLines: logLines)
+                       status: allSet, profiles: profiles, chromeHeight: 72, stageManager: true, logLines: logLines)
 }
 
 @Test func reportListsVersionsAndStatus() {
     let text = report()
     for line in ["App: 1.0.0", "Extension: 0.2.0", "Dia: 1.54.2", "Status: All set · Work",
-                 "Profiles: Personal, Work (extension in Work)", "Title bar: 72pt"] {
+                 "Profiles: Personal, Work (extension in Work)", "Title bar: 72pt", "Stage Manager: on"] {
         #expect(text.contains(line), "missing \(line)")
     }
 }

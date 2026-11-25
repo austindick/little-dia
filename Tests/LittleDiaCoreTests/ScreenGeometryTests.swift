@@ -121,3 +121,22 @@ private let target = Bounds(left: 300, top: 137, width: 1000, height: 750)
     let elsewhere = [WindowCandidate(id: 1, frame: CGRect(x: 340, y: 30, width: 1000, height: 822))]
     #expect(matchLittleWindow(elsewhere, bounds: target, excluding: [], preferring: 1) == nil)
 }
+
+@Test func takesTheFocusedWindowStageManagerMovedSideways() {
+    // From a report: asked for page 200,181 2159x1180; Stage Manager put the window 44pt to the right. Dia's main
+    // window, just as wide but taller, sits at the same spot.
+    let asked = Bounds(left: 200, top: 181, width: 2159, height: 1180)
+    let little = WindowCandidate(id: 1, frame: CGRect(x: 244, y: 109, width: 2159, height: 1252))
+    let main = WindowCandidate(id: 2, frame: CGRect(x: 244, y: 109, width: 2159, height: 1292))
+    #expect(matchLittleWindow([main, little], bounds: asked, excluding: [], preferring: 1, movedWithChromeHeight: 72) == 1)
+    // Only the focused, untracked window of the little window's size, and only when asked to look for a moved one.
+    #expect(matchLittleWindow([main, little], bounds: asked, excluding: [], preferring: 1) == nil)
+    #expect(matchLittleWindow([main, little], bounds: asked, excluding: [], movedWithChromeHeight: 72) == nil)
+    #expect(matchLittleWindow([main, little], bounds: asked, excluding: [], preferring: 2, movedWithChromeHeight: 72) == nil)
+    #expect(matchLittleWindow([main, little], bounds: asked, excluding: [1], preferring: 1, movedWithChromeHeight: 72) == nil)
+}
+
+@Test func aWindowMovedSidewaysIsLeftWhereItIs() {
+    // Stage Manager places windows itself; moving one back would fight it.
+    #expect(ScreenGeometry.requestedOrigin(ofWindow: CGRect(x: 344, y: 30, width: 1000, height: 822), bounds: target) == nil)
+}

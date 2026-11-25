@@ -7,7 +7,8 @@ public enum Diagnostics {
     public static let maxLogLines = 300
 
     public static func report(appVersion: String, extensionVersion: String?, macOSVersion: String, browserVersion: String?,
-                              status: SetupStatus, profiles: BrowserProfiles?, chromeHeight: CGFloat, logLines: [String]) -> String {
+                              status: SetupStatus, profiles: BrowserProfiles?, chromeHeight: CGFloat, stageManager: Bool,
+                              logLines: [String]) -> String {
         let profileLine = profiles.map { "\($0.all.joined(separator: ", ")) (extension in \($0.withExtension.joined(separator: ", ")))" } ?? "none found"
         let facts = [
             "Little Dia diagnostics",
@@ -22,6 +23,7 @@ public enum Diagnostics {
             "Dia pinned to a desktop: \(status.browserPinnedToDesktop ? "yes" : "no")",
             "Profiles: \(profileLine)",
             "Title bar: \(Int(chromeHeight.rounded()))pt",
+            "Stage Manager: \(stageManager ? "on" : "off")",
             "",
             "Recent log:",
         ]

@@ -54,7 +54,9 @@ public enum ScreenGeometry {
     public static func requestedOrigin(ofWindow frame: CGRect, bounds: Bounds, tolerance: CGFloat = 6) -> CGPoint? {
         // The browser's title bar and address row sit above the page area, so line up the bottom edge.
         let origin = CGPoint(x: CGFloat(bounds.left), y: CGFloat(bounds.top + bounds.height) - frame.height)
-        guard abs(frame.minX - origin.x) > tolerance || abs(frame.minY - origin.y) > tolerance else { return nil }
+        // Only Dia's vertical slip is put right. A window moved sideways was placed by macOS (Stage Manager does), and
+        // moving it back would fight it.
+        guard abs(frame.minX - origin.x) <= tolerance, abs(frame.minY - origin.y) > tolerance else { return nil }
         return origin
     }
 
@@ -89,8 +91,12 @@ public struct WindowCandidate<ID: Hashable>: Equatable {
 /// On a display other than the main one, Dia places a popup higher than asked (250pt on a Studio Display beside a
 /// laptop, pinned under the menu bar). So when nothing matches, the preferred window is taken if its left and right
 /// edges do.
+///
+/// With `movedWithChromeHeight` (the browser's usual title-bar height), the focused window may also be anywhere, as long
+/// as it's the little window's size: Stage Manager moves a new window sideways, into line with the browser's others.
 public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>], bounds: Bounds, excluding: Set<ID>,
-                                            tolerance: CGFloat = 6, preferring: ID? = nil) -> ID? {
+                                            tolerance: CGFloat = 6, preferring: ID? = nil,
+                                            movedWithChromeHeight chromeHeight: CGFloat? = nil) -> ID? {
     let left = CGFloat(bounds.left)
     let right = CGFloat(bounds.left + bounds.width)
     let bottom = CGFloat(bounds.top + bounds.height)
@@ -108,7 +114,12 @@ public func matchLittleWindow<ID: Hashable>(_ candidates: [WindowCandidate<ID>],
             best = (candidate.id, score)
         }
     }
-    return best?.id ?? (preferredSides ? preferring : nil)
+    if let id = best?.id ?? (preferredSides ? preferring : nil) { return id }
+    guard let chromeHeight, let preferring, !excluding.contains(preferring),
+          let focused = candidates.first(where: { $0.id == preferring }),
+          abs(focused.frame.width - CGFloat(bounds.width)) <= tolerance,
+          abs(focused.frame.height - CGFloat(bounds.height) - chromeHeight) <= tolerance else { return nil }
+    return preferring
 }
 
 public enum OverlayVisibility {

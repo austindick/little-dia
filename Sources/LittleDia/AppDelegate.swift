@@ -279,7 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .opened(_, windowId, url, bounds):
             recentPages.note(windowId: windowId, url: url, title: nil)
             if let pid = server.browserPID(for: bundleID) {
-                Task { _ = await tracker.track(windowId: windowId, bounds: bounds, browserPID: pid) }
+                Task { _ = await tracker.track(windowId: windowId, bounds: bounds, browserPID: pid, chromeHeight: settings.chromeHeight) }
             }
         case let .littleURL(windowId, url, title):
             recentPages.note(windowId: windowId, url: url, title: title)
@@ -364,7 +364,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       extensionVersion: lastExtensionVersion,
                                       macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                                       browserVersion: browserVersion, status: setupStatus(), profiles: loadProfiles(),
-                                      chromeHeight: settings.chromeHeight, logLines: recentLogLines())
+                                      chromeHeight: settings.chromeHeight, stageManager: SystemIntegration.stageManagerIsOn,
+                                      logLines: recentLogLines())
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         let alert = NSAlert()

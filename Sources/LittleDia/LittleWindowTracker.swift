@@ -79,19 +79,25 @@ final class LittleWindowTracker {
     }
 
     /// Finds the browser window created for `bounds` (polling while it animates open) and starts following it.
-    func track(windowId: Int, bounds: Bounds, browserPID pid: pid_t) async -> Bool {
+    /// `chromeHeight` is the browser's usual title-bar height, for recognising a window that was moved by its size.
+    func track(windowId: Int, bounds: Bounds, browserPID pid: pid_t, chromeHeight: CGFloat) async -> Bool {
         guard AXIsProcessTrusted() else { return false }
         if pid != browserPID { startObserving(pid) }
         let appElement = AXUIElementCreateApplication(pid)
         let clock = ContinuousClock()
         let deadline = clock.now + .seconds(2)
+        // Until then, only a window where it was asked for counts, so an older little window that happens to be
+        // focused while the new one appears isn't taken for it.
+        let movedAllowedAfter = clock.now + .milliseconds(500)
         while clock.now < deadline {
             let windows = axWindows(of: appElement)
             let taken = Set(windows.indices.filter { i in entries.values.contains { CFEqual($0.element, windows[i]) } })
             let candidates = windows.indices.compactMap { i in frame(of: windows[i]).map { WindowCandidate(id: i, frame: $0) } }
             // A new popup is the browser's focused window; prefer it over an older window at the same spot.
             let focused = focusedWindow(of: pid).flatMap { f in windows.firstIndex { CFEqual($0, f) } }
-            if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused),
+            let moved = clock.now >= movedAllowedAfter ? chromeHeight : nil
+            if let index = matchLittleWindow(candidates, bounds: bounds, excluding: taken, preferring: focused,
+                                             movedWithChromeHeight: moved),
                let frame = frame(of: windows[index]) {
                 let element = windows[index]
                 let pageHeight = CGFloat(bounds.height)
