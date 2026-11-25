@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -123,4 +123,18 @@ test("opensAsLittleWindow leaves a popup of its own, such as a sign-in window, a
   const source = { windowId: 7, tabId: 70 };
   assert.equal(opensAsLittleWindow({ id: 71, windowId: 9 }, { id: 9, type: "popup" }, source), false);
   assert.equal(opensAsLittleWindow({ id: 70, windowId: 7 }, { id: 7, type: "popup" }, source), false);
+});
+
+test("pageUpdate reports the address and title when either changes", () => {
+  const tab = { url: "https://linear.app/team/issue/ABC-12", title: "ABC-12 Fix login" };
+  assert.deepEqual(pageUpdate({ url: tab.url }, tab), { url: tab.url, title: "ABC-12 Fix login" });
+  assert.deepEqual(pageUpdate({ title: "ABC-12 Fix login" }, tab), { url: tab.url, title: "ABC-12 Fix login" });
+  // Before the title arrives, the tab may have none.
+  assert.deepEqual(pageUpdate({ url: tab.url }, { url: tab.url }), { url: tab.url, title: "" });
+});
+
+test("pageUpdate ignores other updates", () => {
+  const tab = { url: "https://example.com/", title: "Example" };
+  assert.equal(pageUpdate({ status: "complete" }, tab), null);
+  assert.equal(pageUpdate({ favIconUrl: "https://example.com/favicon.ico" }, tab), null);
 });

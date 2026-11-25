@@ -99,3 +99,14 @@ export function opensAsLittleWindow(tab, tabWindow, source) {
   if (tab.id === source.tabId) return false;
   return tabWindow.type === "normal" || tab.windowId === source.windowId;
 }
+
+/**
+ * What to tell the app about a little window's tab after `chrome.tabs.onUpdated`: its address and title whenever either
+ * changes (for the title bar's Copy and the Recent list), or null for other updates (loading state, favicon, …).
+ */
+export function pageUpdate(changeInfo, tab) {
+  if (changeInfo.url === undefined && changeInfo.title === undefined) return null;
+  const url = tab.url || changeInfo.url;
+  if (!url) return null;
+  return { url, title: tab.title ?? "" };
+}

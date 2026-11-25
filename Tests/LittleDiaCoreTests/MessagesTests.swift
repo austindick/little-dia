@@ -69,6 +69,13 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     #expect(try MessageCoding.decodeInbound(try MessageCoding.encode(m)) == m)
 }
 
+@Test func littleURLCarriesThePageTitle() throws {
+    let json = #"{"type":"littleURL","windowId":7,"url":"https://linear.app/team/issue/ABC-12","title":"ABC-12 Fix login"}"#
+    let m = InboundMessage.littleURL(windowId: 7, url: "https://linear.app/team/issue/ABC-12", title: "ABC-12 Fix login")
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == m)
+    #expect(try MessageCoding.decodeInbound(try MessageCoding.encode(m)) == m)
+}
+
 @Test func hostHelloRoundTrips() throws {
     let m = InboundMessage.hostHello(browserBundleID: "company.thebrowser.dia", browserPID: 1234)
     #expect(try MessageCoding.decodeInbound(try MessageCoding.encode(m)) == m)

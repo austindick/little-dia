@@ -46,15 +46,20 @@ public enum ExtensionInstaller {
 /// other folder, a reload can't change its version, and asking again would reload it forever.
 public struct ExtensionReloadPolicy: Sendable {
     private var asked: [String: Int] = [:]
+    /// The connections already asked, per bundled version.
+    private var askedConnections: [String: Set<Int>] = [:]
 
     public init() {}
 
     /// At most `copies` times per version: once for each browser profile the extension is in. A copy that Dia loads
-    /// from another folder comes back with its old version, and isn't asked again and again.
-    public mutating func shouldReload(connectedVersion: String, bundledVersion: String, copies: Int = 1) -> Bool {
-        guard ExtensionInstaller.needsReload(connectedVersion: connectedVersion, bundledVersion: bundledVersion),
-              asked[bundledVersion, default: 0] < max(copies, 1) else { return false }
+    /// from another folder comes back with its old version, and isn't asked again and again. A connection already
+    /// asked is reloading; another hello on it isn't asked again, and doesn't use up another profile's ask.
+    public mutating func shouldReload(connectedVersion: String, bundledVersion: String, copies: Int = 1, connection: Int? = nil) -> Bool {
+        guard ExtensionInstaller.needsReload(connectedVersion: connectedVersion, bundledVersion: bundledVersion) else { return false }
+        if let connection, askedConnections[bundledVersion, default: []].contains(connection) { return false }
+        guard asked[bundledVersion, default: 0] < max(copies, 1) else { return false }
         asked[bundledVersion, default: 0] += 1
+        if let connection { askedConnections[bundledVersion, default: []].insert(connection) }
         return true
     }
 }

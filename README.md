@@ -56,7 +56,9 @@ Reopen it any time from the menu bar: *Setup…*.
 - Links inside a little window that would open a new tab open another little window instead.
 - **⌘R** reloads a little window; **⌘⇧R** reloads it without the cache.
 - **⌃⇧⌘N** (or *New Little Window…* in the menu) opens a box for a web address or a search, then opens it in a little
-  window.
+  window. If you've copied a link, **Tab** fills it in. **Show recent** under the box (or **↓**) lists the pages you've had
+  open in little windows; type to filter it. The list stays on this Mac; *Clear Recent Pages* in the menu
+  empties it.
 - Closing a little window puts you back in the app you came from.
 - Little windows open at the same size every time. To change it, resize one and choose *Little Window Size → Use
   Current Window's Size* in the menu, or turn on *Remember Size After Resizing* there so each resize sets it.

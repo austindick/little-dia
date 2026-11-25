@@ -76,6 +76,18 @@ private struct Folders {
     #expect(!third)
 }
 
+/// 2026-11-25: one profile's extension said hello twice on the same connection, used up both asks, and the other
+/// profile kept the old version.
+@Test func aSecondHelloOnTheSameConnectionDoesNotUseUpAnotherProfilesAsk() {
+    var policy = ExtensionReloadPolicy()
+    let personal = policy.shouldReload(connectedVersion: "1.1.0", bundledVersion: "1.1.1", copies: 2, connection: 0)
+    let personalAgain = policy.shouldReload(connectedVersion: "1.1.0", bundledVersion: "1.1.1", copies: 2, connection: 0)
+    let work = policy.shouldReload(connectedVersion: "1.1.0", bundledVersion: "1.1.1", copies: 2, connection: 1)
+    #expect(personal)
+    #expect(!personalAgain)
+    #expect(work)
+}
+
 @Test func asksForAReloadOnlyOncePerVersion() {
     var policy = ExtensionReloadPolicy()
     let first = policy.shouldReload(connectedVersion: "0.2.0", bundledVersion: "0.2.1")

@@ -6,12 +6,22 @@ public enum AddressInput {
     public static func url(from text: String) -> URL? {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
+        return address(trimmed: text) ?? search(text)
+    }
+
+    /// The web address in `text`, or nil if it's anything else: for offering copied text as a link, where words
+    /// shouldn't become a search.
+    public static func address(from text: String) -> URL? {
+        address(trimmed: text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func address(trimmed text: String) -> URL? {
         if let scheme = text.split(separator: ":", maxSplits: 1).first?.lowercased(), scheme == "http" || scheme == "https",
            let url = URL(string: text), url.host != nil {
             return url
         }
         if isAddress(text), let url = URL(string: "https://" + text) { return url }
-        return search(text)
+        return nil
     }
 
     /// `example.com/path`, `docs.google.com`, `10.0.0.1:8080`, `localhost:3000`: no spaces, and a host that's

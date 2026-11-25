@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var unrememberedResize: (windowId: Int, page: Bounds)?
     private var keyMonitor: Any?
     private let addressBox = AddressBox()
+    private let recentPages = RecentPages()
     private var newLittleWindowKey: HotKey?
     /// When a modified copy of the browser (signed by someone other than its maker) last tried to connect. Its
     /// extension retries every second, so this goes stale soon after the original browser is back.
@@ -196,6 +197,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater = Updater(settings: settings)
         statusMenu = StatusMenu(settings: settings,
                                 newLittleWindow: { [weak self] in self?.newLittleWindow() },
+                                hasRecentPages: { [weak self] in !(self?.recentPages.entries.isEmpty ?? true) },
+                                clearRecentPages: { [weak self] in
+                                    self?.recentPages.clear()
+                                    self?.logger.notice("recent pages cleared")
+                                },
                                 currentLittleWindowSize: { [weak self] in self?.currentLittleWindowSize() },
                                 useCurrentLittleWindowSize: { [weak self] in self?.useCurrentLittleWindowSize() },
                                 remembersResizedSizeChanged: { [weak self] in self?.remembersResizedSizeChanged() },
@@ -245,7 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func newLittleWindow() {
         // The box doesn't activate this app, so the frontmost app is still the one to go back to.
         let cameFrom = focusReturn.origin(frontmost: NSWorkspace.shared.frontmostApplication)
-        addressBox.show { [weak self] url in
+        addressBox.show(recent: recentPages) { [weak self] url in
             self?.logger.notice("new little window asked for; cameFrom=\(cameFrom?.localizedName ?? "none", privacy: .public)")
             self?.open([url], cameFrom: cameFrom, evenWhenDisabled: true)
         }
@@ -270,16 +276,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.notice("event \(Self.describe(message), privacy: .public) (connection \(connection))")
         registry.apply(message, from: bundleID, connection: connection)
         switch message {
-        case let .opened(_, windowId, _, bounds):
+        case let .opened(_, windowId, url, bounds):
+            recentPages.note(windowId: windowId, url: url, title: nil)
             if let pid = server.browserPID(for: bundleID) {
                 Task { _ = await tracker.track(windowId: windowId, bounds: bounds, browserPID: pid) }
             }
+        case let .littleURL(windowId, url, title):
+            recentPages.note(windowId: windowId, url: url, title: title)
         case let .littleHistory(windowId, canGoBack):
             overlay.setCanGoBack(canGoBack, windowId: windowId)
         case let .littleBounds(_, bounds):
             if settings.remembersResizedSize { settings.rememberSize(bounds) }
         case let .littleClosed(windowId):
             tracker.untrack(windowId: windowId)
+            recentPages.windowClosed(windowId)
             if lastLittleWindow == windowId { lastLittleWindow = nil }
             if unrememberedResize?.windowId == windowId { unrememberedResize = nil }
             Task { await focusReturn.handle(message) }
@@ -418,7 +428,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// After an update, the extension Dia is running is older than the copy just installed: have it reload from disk.
     private func checkExtensionVersion(_ version: String, connection: Int) {
         guard let bundled = bundledExtensionVersion, version != bundled else { return }
-        if reloadPolicy.shouldReload(connectedVersion: version, bundledVersion: bundled, copies: profiles?.withExtension.count ?? 1) {
+        if reloadPolicy.shouldReload(connectedVersion: version, bundledVersion: bundled, copies: profiles?.withExtension.count ?? 1,
+                                     connection: connection) {
             logger.notice("extension \(version, privacy: .public) differs from the bundled \(bundled, privacy: .public); asking it to reload")
             server.send(.reload, toConnection: connection)
         } else {
@@ -571,7 +582,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .littleBounds(windowId, b): return "littleBounds window=\(windowId) \(b.left),\(b.top) \(b.width)x\(b.height)"
         case let .littleClosed(windowId): return "littleClosed window=\(windowId)"
         case let .littleMoved(windowId): return "littleMoved window=\(windowId)"
-        case let .littleURL(windowId, _): return "littleURL window=\(windowId)"
+        case let .littleURL(windowId, _, _): return "littleURL window=\(windowId)"
         case let .littleHistory(windowId, canGoBack): return "littleHistory window=\(windowId) canGoBack=\(canGoBack)"
         case let .openFailed(requestId, error): return "openFailed request=\(requestId) \(error)"
         case let .hello(version, _): return "hello \(version)"

@@ -43,7 +43,9 @@ public enum InboundMessage: Equatable, Sendable {
     case hello(extensionVersion: String, profileToken: String? = nil)
     case opened(requestId: String?, windowId: Int, url: String, bounds: Bounds)
     case openFailed(requestId: String, error: String)
-    case littleURL(windowId: Int, url: String)
+    /// A little window's page changed address or title. `title` is "" before the page has one (older extensions don't
+    /// send it).
+    case littleURL(windowId: Int, url: String, title: String? = nil)
     /// Whether a little window's tab has a page to go back to; sent when its page loads or its history changes.
     case littleHistory(windowId: Int, canGoBack: Bool)
     case littleBounds(windowId: Int, bounds: Bounds)
@@ -69,7 +71,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, chromeHeight, topOffset, windowId, canGoBack, bypassCache, browserBundleID, browserPID, extensionVersion, profileToken, error, message
+    case type, requestId, url, bounds, focused, chromeHeight, topOffset, windowId, canGoBack, title, bypassCache, browserBundleID, browserPID, extensionVersion, profileToken, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
@@ -157,7 +159,8 @@ extension InboundMessage: Codable {
         case "openFailed":
             self = .openFailed(requestId: try c.decode(String.self, forKey: .requestId), error: try c.decode(String.self, forKey: .error))
         case "littleURL":
-            self = .littleURL(windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decode(String.self, forKey: .url))
+            self = .littleURL(windowId: try c.decode(Int.self, forKey: .windowId), url: try c.decode(String.self, forKey: .url),
+                              title: try c.decodeIfPresent(String.self, forKey: .title))
         case "littleHistory":
             self = .littleHistory(windowId: try c.decode(Int.self, forKey: .windowId), canGoBack: try c.decode(Bool.self, forKey: .canGoBack))
         case "littleBounds":
@@ -194,10 +197,11 @@ extension InboundMessage: Codable {
             try c.encode("openFailed", forKey: .type)
             try c.encode(requestId, forKey: .requestId)
             try c.encode(error, forKey: .error)
-        case let .littleURL(windowId, url):
+        case let .littleURL(windowId, url, title):
             try c.encode("littleURL", forKey: .type)
             try c.encode(windowId, forKey: .windowId)
             try c.encode(url, forKey: .url)
+            try c.encodeIfPresent(title, forKey: .title)
         case let .littleHistory(windowId, canGoBack):
             try c.encode("littleHistory", forKey: .type)
             try c.encode(windowId, forKey: .windowId)

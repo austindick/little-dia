@@ -31,7 +31,7 @@ public final class LittleWindowRegistry {
         switch message {
         case let .opened(_, windowId, url, bounds):
             windows[windowId] = LittleWindowInfo(windowId: windowId, browserBundleID: bundleID, connection: connection, url: url, bounds: bounds)
-        case let .littleURL(windowId, url):
+        case let .littleURL(windowId, url, _):
             windows[windowId]?.url = url
         case let .littleHistory(windowId, canGoBack):
             windows[windowId]?.canGoBack = canGoBack

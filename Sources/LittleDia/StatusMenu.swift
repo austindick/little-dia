@@ -7,6 +7,8 @@ import LittleDiaCore
 final class StatusMenu: NSObject, NSMenuDelegate {
     private let settings: UserDefaultsSettings
     private let newLittleWindow: () -> Void
+    private let hasRecentPages: () -> Bool
+    private let clearRecentPages: () -> Void
     private let currentLittleWindowSize: () -> Bounds?
     private let useCurrentLittleWindowSize: () -> Void
     private let remembersResizedSizeChanged: () -> Void
@@ -21,6 +23,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let menu = NSMenu()
 
     init(settings: UserDefaultsSettings, newLittleWindow: @escaping () -> Void,
+         hasRecentPages: @escaping () -> Bool, clearRecentPages: @escaping () -> Void,
          currentLittleWindowSize: @escaping () -> Bounds?, useCurrentLittleWindowSize: @escaping () -> Void,
          remembersResizedSizeChanged: @escaping () -> Void, status: @escaping () -> SetupStatus, showSetup: @escaping () -> Void,
          copyDiagnostics: @escaping () -> Void, updateOffer: @escaping () -> UpdateOffer?,
@@ -28,6 +31,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
          isUpdating: @escaping () -> Bool) {
         self.settings = settings
         self.newLittleWindow = newLittleWindow
+        self.hasRecentPages = hasRecentPages
+        self.clearRecentPages = clearRecentPages
         self.currentLittleWindowSize = currentLittleWindowSize
         self.useCurrentLittleWindowSize = useCurrentLittleWindowSize
         self.remembersResizedSizeChanged = remembersResizedSizeChanged
@@ -43,6 +48,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         image?.isTemplate = true
         statusItem.button?.image = image
         menu.delegate = self
+        menu.autoenablesItems = false   // "Clear Recent Pages" is greyed out when there are none
         statusItem.menu = menu
         refresh()
     }
@@ -59,6 +65,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         new.keyEquivalent = "n"
         new.keyEquivalentModifierMask = [.command, .control, .shift]
         menu.addItem(new)
+        // Empties the Recent list in the New Little Window box.
+        let clear = action("Clear Recent Pages", clearRecentPages)
+        clear.isEnabled = hasRecentPages()
+        menu.addItem(clear)
         menu.addItem(action("Open Links in Little Windows", checked: settings.isEnabled) { [weak self] in
             guard let self else { return }
             settings.isEnabled.toggle()

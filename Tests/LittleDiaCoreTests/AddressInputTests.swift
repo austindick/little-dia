@@ -32,3 +32,14 @@ import Testing
     #expect(AddressInput.url(from: "") == nil)
     #expect(AddressInput.url(from: "   \n") == nil)
 }
+
+@Test func aCopiedAddressIsALink() {
+    #expect(AddressInput.address(from: "https://linear.app/team/issue/ABC-12\n") == URL(string: "https://linear.app/team/issue/ABC-12"))
+    #expect(AddressInput.address(from: "docs.google.com/document/d/1") == URL(string: "https://docs.google.com/document/d/1"))
+}
+
+@Test func copiedTextThatIsntAnAddressIsNoLink() {
+    for text in ["", "swift testing", "dia", "e.g.", "javascript:alert(1)", "file:///etc/hosts", "https://"] {
+        #expect(AddressInput.address(from: text) == nil, "\(text)")
+    }
+}
