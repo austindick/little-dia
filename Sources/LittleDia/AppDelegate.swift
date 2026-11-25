@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyMonitor: Any?
     private let addressBox = AddressBox()
     private let recentPages = RecentPages()
+    /// The Recent list's site icons, from Dia's icon store via the extension.
+    private let siteIcons = SiteIcons(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Little Dia/Site Icons", isDirectory: true))
     private var newLittleWindowKey: HotKey?
     /// When a modified copy of the browser (signed by someone other than its maker) last tried to connect. Its
     /// extension retries every second, so this goes stale soon after the original browser is back.
@@ -200,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 hasRecentPages: { [weak self] in !(self?.recentPages.entries.isEmpty ?? true) },
                                 clearRecentPages: { [weak self] in
                                     self?.recentPages.clear()
+                                    self?.siteIcons.clear()
                                     self?.logger.notice("recent pages cleared")
                                 },
                                 currentLittleWindowSize: { [weak self] in self?.currentLittleWindowSize() },
@@ -251,9 +255,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func newLittleWindow() {
         // The box doesn't activate this app, so the frontmost app is still the one to go back to.
         let cameFrom = focusReturn.origin(frontmost: NSWorkspace.shared.frontmostApplication)
-        addressBox.show(recent: recentPages) { [weak self] url in
+        addressBox.show(recent: recentPages, icon: { [siteIcons] page in
+            siteIcons.pngData(forPage: page).flatMap(NSImage.init(data:))
+        }) { [weak self] url in
             self?.logger.notice("new little window asked for; cameFrom=\(cameFrom?.localizedName ?? "none", privacy: .public)")
             self?.open([url], cameFrom: cameFrom, evenWhenDisabled: true)
+        }
+        askForSiteIcons()
+    }
+
+    /// Asks each profile's extension for the icons of Recent pages whose site has none yet; they arrive as `favicons`.
+    private func askForSiteIcons() {
+        let pages = siteIcons.toAsk(for: recentPages.entries)
+        guard !pages.isEmpty else { return }
+        for connection in server.readyConnections(for: settings.browser.bundleID) {
+            _ = server.send(.favicons(pageURLs: pages), toConnection: connection)
         }
     }
 
@@ -302,6 +318,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             checkExtensionVersion(version, connection: connection)
         case let .log(text):
             logger.notice("extension: \(text, privacy: .public)")
+        case let .favicons(icons):
+            if siteIcons.store(icons) { addressBox.iconsChanged() }
         default:
             break
         }

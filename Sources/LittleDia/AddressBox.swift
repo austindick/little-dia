@@ -64,6 +64,8 @@ final class AddressBox: NSObject, NSWindowDelegate, NSTextFieldDelegate, NSTable
     /// Counts openings, so a clipboard check that finishes after the box has closed is ignored.
     private var opening = 0
     private var recent: RecentPages?
+    /// A page's site icon, if one is cached.
+    private var siteIcon: (String) -> NSImage? = { _ in nil }
     private var isExpanded = false
     private var results: [RecentPages.Entry] = []
     private var listHeightConstraint: NSLayoutConstraint!
@@ -251,10 +253,17 @@ final class AddressBox: NSObject, NSWindowDelegate, NSTextFieldDelegate, NSTable
         panel.contentView = container
     }
 
+    /// New site icons arrived: redraws the rows, keeping the selection.
+    func iconsChanged() {
+        guard table.numberOfRows > 0 else { return }
+        table.reloadData(forRowIndexes: IndexSet(integersIn: 0..<table.numberOfRows), columnIndexes: IndexSet(integer: 0))
+    }
+
     /// Shows the box on this desktop, on the screen the pointer is on. If it's already open, brings it forward as it is.
-    func show(recent: RecentPages, onSubmit: @escaping (URL) -> Void) {
+    func show(recent: RecentPages, icon: @escaping (String) -> NSImage?, onSubmit: @escaping (URL) -> Void) {
         self.onSubmit = onSubmit
         self.recent = recent
+        siteIcon = icon
         if !panel.isVisible {
             field.stringValue = ""
             isExpanded = false
@@ -450,7 +459,7 @@ final class AddressBox: NSObject, NSWindowDelegate, NSTextFieldDelegate, NSTable
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let cell = tableView.makeView(withIdentifier: RecentCell.identifier, owner: nil) as? RecentCell ?? RecentCell()
-        cell.show(results[row], now: Date())
+        cell.show(results[row], now: Date(), icon: siteIcon(results[row].url))
         return cell
     }
 
@@ -737,6 +746,8 @@ private final class RecentCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("recent")
     /// From the row's edge to its text.
     static let textInset: CGFloat = 8
+    static let iconSize: CGFloat = 16
+    private let siteIcon = NSImageView()
     private let title = NSTextField(labelWithString: "")
     private let address = NSTextField(labelWithString: "")
     private let age = NSTextField(labelWithString: "")
@@ -760,8 +771,18 @@ private final class RecentCell: NSTableCellView {
             field.setContentHuggingPriority(.required, for: .horizontal)
             addSubview(field)
         }
+        siteIcon.translatesAutoresizingMaskIntoConstraints = false
+        siteIcon.imageScaling = .scaleProportionallyUpOrDown
+        siteIcon.wantsLayer = true
+        siteIcon.layer?.cornerRadius = 3
+        siteIcon.layer?.masksToBounds = true
+        addSubview(siteIcon)
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.textInset),
+            siteIcon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.textInset),
+            siteIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            siteIcon.widthAnchor.constraint(equalToConstant: Self.iconSize),
+            siteIcon.heightAnchor.constraint(equalToConstant: Self.iconSize),
+            title.leadingAnchor.constraint(equalTo: siteIcon.trailingAnchor, constant: 8),
             title.centerYAnchor.constraint(equalTo: centerYAnchor),
             // A long title still leaves room for some of the address.
             title.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.6),
@@ -775,7 +796,15 @@ private final class RecentCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func show(_ entry: RecentPages.Entry, now: Date) {
+    /// `icon` is the site's icon; without one, a grey globe keeps the rows lined up.
+    func show(_ entry: RecentPages.Entry, now: Date, icon: NSImage?) {
+        if let icon {
+            siteIcon.image = icon
+            siteIcon.contentTintColor = nil
+        } else {
+            siteIcon.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+            siteIcon.contentTintColor = .tertiaryLabelColor
+        }
         title.stringValue = entry.displayTitle
         address.stringValue = Self.shortAddress(entry.url)
         age.stringValue = Self.age(of: entry.date, now: now)
