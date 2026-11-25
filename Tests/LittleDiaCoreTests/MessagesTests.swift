@@ -98,3 +98,13 @@ private let b = Bounds(left: 300, top: 137, width: 1000, height: 750)
     let json = #"{"type":"littleHistory","windowId":42,"canGoBack":true}"#
     #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .littleHistory(windowId: 42, canGoBack: true))
 }
+
+@Test func encodesFaviconsRequestExactly() throws {
+    #expect(String(decoding: try MessageCoding.encode(OutboundMessage.favicons(pageURLs: ["https://a.example/"])), as: UTF8.self)
+            == #"{"pageURLs":["https://a.example/"],"type":"favicons"}"#)
+}
+
+@Test func decodesFavicons() throws {
+    let json = #"{"type":"favicons","icons":{"https://a.example/":"iVBO"}}"#
+    #expect(try MessageCoding.decodeInbound(Data(json.utf8)) == .favicons(icons: ["https://a.example/": "iVBO"]))
+}

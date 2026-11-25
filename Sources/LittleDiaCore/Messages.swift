@@ -31,6 +31,8 @@ public enum OutboundMessage: Equatable, Sendable {
     case ping
     /// Asks the extension to reload itself from disk, after the app installed a newer copy.
     case reload
+    /// Asks for the icons Dia has for these pages; the extension answers with `InboundMessage.favicons`.
+    case favicons(pageURLs: [String])
 }
 
 /// Messages the app receives on the bridge socket: the helper's `hostHello`, then everything the extension sends.
@@ -54,6 +56,8 @@ public enum InboundMessage: Equatable, Sendable {
     case littleMoved(windowId: Int)
     /// A diagnostic line from the extension (its own console isn't reachable in Dia).
     case log(message: String)
+    /// Page icons from Dia's icon store, base64 PNG by page URL; pages Dia has no icon for are left out.
+    case favicons(icons: [String: String])
 }
 
 /// JSON wire format: an object whose `"type"` is the case name and whose other keys are the case's labels.
@@ -71,7 +75,7 @@ public enum MessageCoding {
 }
 
 private enum Key: String, CodingKey {
-    case type, requestId, url, bounds, focused, chromeHeight, topOffset, windowId, canGoBack, title, bypassCache, browserBundleID, browserPID, extensionVersion, profileToken, error, message
+    case type, requestId, url, bounds, pageURLs, icons, focused, chromeHeight, topOffset, windowId, canGoBack, title, bypassCache, browserBundleID, browserPID, extensionVersion, profileToken, error, message
 }
 
 private extension KeyedDecodingContainer where Key == LittleDiaCore.Key {
@@ -105,6 +109,8 @@ extension OutboundMessage: Codable {
             self = .ping
         case "reload":
             self = .reload
+        case "favicons":
+            self = .favicons(pageURLs: try c.decode([String].self, forKey: .pageURLs))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Unknown outbound type \(other)")
         }
@@ -138,6 +144,9 @@ extension OutboundMessage: Codable {
             try c.encode("ping", forKey: .type)
         case .reload:
             try c.encode("reload", forKey: .type)
+        case let .favicons(pageURLs):
+            try c.encode("favicons", forKey: .type)
+            try c.encode(pageURLs, forKey: .pageURLs)
         }
     }
 }
@@ -171,6 +180,8 @@ extension InboundMessage: Codable {
             self = .littleMoved(windowId: try c.decode(Int.self, forKey: .windowId))
         case "log":
             self = .log(message: try c.decode(String.self, forKey: .message))
+        case "favicons":
+            self = .favicons(icons: try c.decode([String: String].self, forKey: .icons))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Unknown inbound type \(other)")
         }
@@ -219,6 +230,9 @@ extension InboundMessage: Codable {
         case let .log(message):
             try c.encode("log", forKey: .type)
             try c.encode(message, forKey: .message)
+        case let .favicons(icons):
+            try c.encode("favicons", forKey: .type)
+            try c.encode(icons, forKey: .icons)
         }
     }
 }

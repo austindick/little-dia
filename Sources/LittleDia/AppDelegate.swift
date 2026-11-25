@@ -589,6 +589,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .hello(version, _): return "hello \(version)"
         case .log: return "log"
         case .hostHello: return "hostHello"
+        case let .favicons(icons): return "favicons count=\(icons.count)"
         }
     }
 
