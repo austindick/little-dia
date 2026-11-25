@@ -123,3 +123,14 @@ export function faviconPath(pageUrl) {
 export function knownIcons(found, defaultIcon) {
   return Object.fromEntries(Object.entries(found).filter(([, icon]) => icon && icon !== defaultIcon));
 }
+
+/**
+ * The icons Dia has for these pages, by page URL. Its generic icon is read on every call: it follows the light or
+ * dark theme, so one remembered from earlier could stop matching and be sent as a site's own icon.
+ */
+export async function collectIcons(pageURLs, readIcon) {
+  const defaultIcon = await readIcon("https://no-such-site.invalid/");
+  const found = {};
+  for (const url of pageURLs ?? []) found[url] = await readIcon(url);
+  return knownIcons(found, defaultIcon);
+}

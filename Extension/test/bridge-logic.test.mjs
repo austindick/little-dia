@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate, faviconPath, knownIcons } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate, faviconPath, knownIcons, collectIcons } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -145,4 +145,12 @@ test("faviconPath asks Dia's icon store for a page at 32px", () => {
 
 test("knownIcons drops Dia's default icon and failed lookups", () => {
   assert.deepEqual(knownIcons({ "https://a/": "AAA", "https://b/": "DEF", "https://c/": null }, "DEF"), { "https://a/": "AAA" });
+});
+
+test("collectIcons reads Dia's default icon afresh each time, so a theme change can't slip it through", async () => {
+  let theme = "LIGHT";
+  const readIcon = async (url) => (url === "https://a/" ? "AAA" : theme);
+  assert.deepEqual(await collectIcons(["https://a/", "https://b/"], readIcon), { "https://a/": "AAA" });
+  theme = "DARK";
+  assert.deepEqual(await collectIcons(["https://a/", "https://b/"], readIcon), { "https://a/": "AAA" });
 });

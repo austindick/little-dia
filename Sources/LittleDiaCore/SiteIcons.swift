@@ -23,23 +23,28 @@ public final class SiteIcons {
     }
 
     /// The pages to ask the extension about: one per site with no cached icon that hasn't been asked about since
-    /// launch (or since `clear`). The sites returned count as asked.
+    /// launch (or since `clear`). Call `markAsked` once the request has actually gone out.
     public func toAsk(for entries: [RecentPages.Entry]) -> [String] {
-        var pages: [String] = []
+        var pages: [String] = [], names: Set<String> = []
         for entry in entries {
-            guard let name = Self.iconFileName(forPage: entry.url), !askedFileNames.contains(name),
+            guard let name = Self.iconFileName(forPage: entry.url), !askedFileNames.contains(name), names.insert(name).inserted,
                   !FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path) else { continue }
-            askedFileNames.insert(name)
             pages.append(entry.url)
         }
         return pages
     }
 
-    /// Saves the icons that are real PNGs of a sensible size. True if any was written.
+    /// These pages' sites have been asked about: they aren't asked again this launch, and their icons are accepted.
+    public func markAsked(_ pages: [String]) {
+        askedFileNames.formUnion(pages.compactMap(Self.iconFileName(forPage:)))
+    }
+
+    /// Saves the icons that are real PNGs of a sensible size, for sites that were asked about (and not cleared since).
+    /// True if any was written.
     public func store(_ icons: [String: String]) -> Bool {
         var wrote = false
         for (page, base64) in icons {
-            guard let name = Self.iconFileName(forPage: page), let data = Data(base64Encoded: base64),
+            guard let name = Self.iconFileName(forPage: page), askedFileNames.contains(name), let data = Data(base64Encoded: base64),
                   data.count <= Self.maxBytes, data.starts(with: Self.pngSignature) else { continue }
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             if (try? data.write(to: directory.appendingPathComponent(name), options: .atomic)) != nil { wrote = true }

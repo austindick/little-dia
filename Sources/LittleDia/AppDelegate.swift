@@ -265,12 +265,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Asks each profile's extension for the icons of Recent pages whose site has none yet; they arrive as `favicons`.
+    /// Sites count as asked only once a request went out, so opening the box before Dia connects doesn't leave them
+    /// without icons until the next launch.
     private func askForSiteIcons() {
         let pages = siteIcons.toAsk(for: recentPages.entries)
         guard !pages.isEmpty else { return }
-        for connection in server.readyConnections(for: settings.browser.bundleID) {
-            _ = server.send(.favicons(pageURLs: pages), toConnection: connection)
-        }
+        let sent = server.readyConnections(for: settings.browser.bundleID)
+            .filter { server.send(.favicons(pageURLs: pages), toConnection: $0) }
+        if !sent.isEmpty { siteIcons.markAsked(pages) }
     }
 
     /// Opens URLs in little windows. `cameFrom`: the app focus goes back to when the little window closes.

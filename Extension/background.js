@@ -1,6 +1,6 @@
 // Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate, faviconPath, knownIcons } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate, faviconPath, collectIcons } from "./bridge-logic.js";
 
 const HOST = "com.austindick.littledia.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used only if the app didn't send its measurement.
@@ -161,14 +161,8 @@ async function readIcon(pageUrl) {
   }
 }
 
-/** Dia's generic icon, which it gives for any page it has no icon for. */
-let defaultIcon;
-
 async function sendIcons(pageURLs) {
-  defaultIcon ??= await readIcon("https://no-such-site.invalid/");
-  const found = {};
-  for (const url of pageURLs ?? []) found[url] = await readIcon(url);
-  post({ type: "favicons", icons: knownIcons(found, defaultIcon) });
+  post({ type: "favicons", icons: await collectIcons(pageURLs, readIcon) });
 }
 
 async function handleAppMessage(msg) {

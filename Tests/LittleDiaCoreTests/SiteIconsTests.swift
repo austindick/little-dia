@@ -16,6 +16,7 @@ private func entries(_ urls: String...) -> [RecentPages.Entry] {
 @MainActor @Test func iconsAreKeptPerSite() {
     let folder = freshFolder()
     let icons = SiteIcons(directory: folder)
+    icons.markAsked(icons.toAsk(for: entries("https://Docs.Example.com/a")))
     #expect(icons.store(["https://Docs.Example.com/a": png]))
     #expect(icons.pngData(forPage: "https://docs.example.com/b") == pngBytes)
     #expect(SiteIcons(directory: folder).pngData(forPage: "https://docs.example.com/c") == pngBytes)
@@ -34,6 +35,7 @@ private func entries(_ urls: String...) -> [RecentPages.Entry] {
 
 @MainActor @Test func badDataIsNotKept() {
     let icons = SiteIcons(directory: freshFolder())
+    icons.markAsked(icons.toAsk(for: entries("https://a.example/")))
     let big = (pngBytes + Data(count: 256 * 1024)).base64EncodedString()
     for bad in ["not base64!", Data("hello".utf8).base64EncodedString(), big] {
         #expect(!icons.store(["https://a.example/": bad]))
@@ -45,7 +47,7 @@ private func entries(_ urls: String...) -> [RecentPages.Entry] {
     let folder = freshFolder()
     let icons = SiteIcons(directory: folder)
     let pages = entries("https://a.example/1", "https://a.example/2", "https://b.example/1")
-    #expect(icons.toAsk(for: pages).count == 2)
+    icons.markAsked(icons.toAsk(for: pages))
     #expect(icons.toAsk(for: pages) == [])
     #expect(icons.store(["https://a.example/1": png]))
     #expect(SiteIcons(directory: folder).toAsk(for: pages) == ["https://b.example/1"])
@@ -55,11 +57,32 @@ private func entries(_ urls: String...) -> [RecentPages.Entry] {
     let folder = freshFolder()
     let icons = SiteIcons(directory: folder)
     let pages = entries("https://a.example/1", "https://b.example/1")
-    _ = icons.toAsk(for: pages)
+    icons.markAsked(icons.toAsk(for: pages))
     #expect(icons.store(["https://a.example/1": png]))
     icons.clear()
     #expect(icons.pngData(forPage: "https://a.example/1") == nil)
     let left = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
     #expect(!left.contains { $0.hasSuffix(".png") })
     #expect(icons.toAsk(for: pages).count == 2)
+}
+
+@MainActor @Test func aSiteIsAskedAgainUntilARequestGoesOut() {
+    // Little Dia can open the box before Dia connects: nothing is sent, so nothing counts as asked.
+    let icons = SiteIcons(directory: freshFolder())
+    let pages = entries("https://a.example/1", "https://b.example/1")
+    #expect(icons.toAsk(for: pages).count == 2)
+    #expect(icons.toAsk(for: pages).count == 2)
+    icons.markAsked(icons.toAsk(for: pages))
+    #expect(icons.toAsk(for: pages) == [])
+}
+
+@MainActor @Test func onlyAskedSitesAreStoredSoClearIsFinal() {
+    let folder = freshFolder()
+    let icons = SiteIcons(directory: folder)
+    #expect(!icons.store(["https://never-asked.example/": png]))
+    icons.markAsked(icons.toAsk(for: entries("https://a.example/1")))
+    icons.clear()
+    // A reply to the request made before Clear Recent Pages arrives afterwards: it isn't written back.
+    #expect(!icons.store(["https://a.example/1": png]))
+    #expect(icons.pngData(forPage: "https://a.example/1") == nil)
 }
