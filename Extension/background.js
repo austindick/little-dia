@@ -1,6 +1,6 @@
 // Little Dia service worker: opens little windows (Dia popups) when the menu-bar app asks, and reports what
 // happens to them. Talks to the app through the native-messaging helper `com.austindick.littledia.bridge`.
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate } from "./bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, reportedBounds, makeSerial, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate, faviconPath, knownIcons } from "./bridge-logic.js";
 
 const HOST = "com.austindick.littledia.bridge";
 // Height Dia adds above a popup's page area (measured 2026-10-23); used only if the app didn't send its measurement.
@@ -147,8 +147,35 @@ async function moveToMainWindow(windowId) {
   post({ type: "littleMoved", windowId });
 }
 
+/** A page's icon from Dia's icon store, as base64 PNG, or null. */
+async function readIcon(pageUrl) {
+  try {
+    const response = await fetch(chrome.runtime.getURL(faviconPath(pageUrl)));
+    if (!response.ok) return null;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  } catch {
+    return null;
+  }
+}
+
+/** Dia's generic icon, which it gives for any page it has no icon for. */
+let defaultIcon;
+
+async function sendIcons(pageURLs) {
+  defaultIcon ??= await readIcon("https://no-such-site.invalid/");
+  const found = {};
+  for (const url of pageURLs ?? []) found[url] = await readIcon(url);
+  post({ type: "favicons", icons: knownIcons(found, defaultIcon) });
+}
+
 async function handleAppMessage(msg) {
   switch (msg.type) {
+    case "favicons":
+      await sendIcons(msg.pageURLs);
+      break;
     case "open":
       try {
         await openLittleWindow({ url: msg.url, bounds: msg.bounds, focused: msg.focused, requestId: msg.requestId, chromeHeight: msg.chromeHeight, topOffset: msg.topOffset });

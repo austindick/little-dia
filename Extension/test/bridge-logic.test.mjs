@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate } from "../bridge-logic.js";
+import { popupCreateOptions, pickMainWindowId, cascadeBounds, windowBounds, chromeHeight, nextReconnectDelay, addedHeight, isWebURL, opensAsLittleWindow, pageUpdate, faviconPath, knownIcons } from "../bridge-logic.js";
 
 const bounds = { left: 300, top: 137, width: 1000, height: 750 };
 
@@ -137,4 +137,12 @@ test("pageUpdate ignores other updates", () => {
   const tab = { url: "https://example.com/", title: "Example" };
   assert.equal(pageUpdate({ status: "complete" }, tab), null);
   assert.equal(pageUpdate({ favIconUrl: "https://example.com/favicon.ico" }, tab), null);
+});
+
+test("faviconPath asks Dia's icon store for a page at 32px", () => {
+  assert.equal(faviconPath("https://a.example/x?y=1"), "/_favicon/?pageUrl=https%3A%2F%2Fa.example%2Fx%3Fy%3D1&size=32");
+});
+
+test("knownIcons drops Dia's default icon and failed lookups", () => {
+  assert.deepEqual(knownIcons({ "https://a/": "AAA", "https://b/": "DEF", "https://c/": null }, "DEF"), { "https://a/": "AAA" });
 });

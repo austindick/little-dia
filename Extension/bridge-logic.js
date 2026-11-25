@@ -110,3 +110,16 @@ export function pageUpdate(changeInfo, tab) {
   if (!url) return null;
   return { url, title: tab.title ?? "" };
 }
+
+/** Where the extension reads Dia's own icon for a page (the "favicon" permission): no network involved. */
+export function faviconPath(pageUrl) {
+  return `/_favicon/?pageUrl=${encodeURIComponent(pageUrl)}&size=32`;
+}
+
+/**
+ * The icons worth sending: for a page it has no icon for, Dia answers with its generic one (`defaultIcon`), and a
+ * failed lookup is null. Both are left out, so the app shows its own placeholder and can ask again later.
+ */
+export function knownIcons(found, defaultIcon) {
+  return Object.fromEntries(Object.entries(found).filter(([, icon]) => icon && icon !== defaultIcon));
+}
