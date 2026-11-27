@@ -12,7 +12,7 @@ import os
 @MainActor
 final class TitleBarOverlay {
     /// Gaps above and to the right of the buttons, inside the window's top-right corner. With the buttons'
-    /// height they fill Dia's 31pt title bar (measured 2026-10-26) with an equal gap below.
+    /// height they fill Dia's 32pt title bar with an equal gap below.
     static let topInset: CGFloat = 4
     static let rightInset: CGFloat = 4
     /// Dia's popup window corner radius (estimated); the rightmost button's top-right corner nests inside it.
@@ -312,8 +312,9 @@ private final class PillButton: NSButton {
         static let standard = Corners(topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius)
     }
 
-    /// 4pt above, 23pt of button and 4pt below fill Dia's 31pt title bar.
-    static let height: CGFloat = 23
+    /// 4pt above, 24pt of button and 4pt below fill Dia's 32pt title bar (measured 2026-11-27 with Dia 1.58; it was
+    /// 31pt on 2026-10-26).
+    static let height: CGFloat = 24
     private let filled: Bool
     private let corners: Corners
     private let fixedWidth: CGFloat?
